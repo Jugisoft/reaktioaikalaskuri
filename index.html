@@ -290,7 +290,7 @@ const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const hasRVFC = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
 const FPS_SNAP = [23.976, 24, 25, 29.97, 30, 48, 50, 59.94, 60, 90, 100, 119.88, 120, 180, 200, 239.76, 240, 480, 960];
-const APP_VERSION = '2026-09-23.5 (analyysi)';
+const APP_VERSION = '2026-09-23.6 (iPhone-korjaus)';
 const PESAT = ['Kotipesä', '1-pesä', '2-pesä', '3-pesä'];
 const MK = ['t0', 't1', 't2'];
 const MCOL = { t0: '#eda100', t1: '#1baf7a', t2: '#eb6834' };
@@ -430,6 +430,19 @@ function seekToFrame(f) {
 }
 function stepFrames(n) { if (S.ready) gotoFrame((NAV.busy ? NAV.target : S.curFrame) + n); }
 
+// iPhone/Safari (myös iPhonen Chrome) lataa ennen toistoa vain metatiedot eikä noudata preload-asetusta,
+// jolloin 'loadeddata' ei laukea koskaan. Silloin video käynnistetään hetkeksi äänettömänä ja pysäytetään.
+async function waitFirstFrame(errP) {
+  await Promise.race([waitEvent(v, 'loadedmetadata', 20000), errP]);
+  if (v.readyState >= 2) return;
+  const ld = waitEvent(v, 'loadeddata', 15000); ld.catch(() => { });
+  const wasMuted = v.muted; v.muted = true;
+  try { await v.play(); } catch (e) { }
+  try { await Promise.race([ld, errP]); } finally { v.pause(); v.muted = wasMuted; }
+}
+function loadErrText(e) {
+  return /aikakatkaisu/.test(e.message) ? 'Videon lataus ei edennyt (aikakatkaisu). Kokeile uudelleen tai lyhyempää videopätkää.' : e.message;
+}
 function waitEvent(el, name, timeout) {
   return new Promise((res, rej) => {
     const on = () => { clearTimeout(t); el.removeEventListener(name, on); res(); };
@@ -492,8 +505,8 @@ async function loadFile(file) {
   S.url = URL.createObjectURL(file);
   const errP = new Promise((_, rej) => v.addEventListener('error', () => rej(new Error('Selain ei pysty toistamaan tätä videota.')), { once: true }));
   v.src = S.url;
-  try { await Promise.race([waitEvent(v, 'loadeddata', 20000), errP]); }
-  catch (e) { return showErr(e.message); }
+  try { await waitFirstFrame(errP); }
+  catch (e) { return showErr(loadErrText(e)); }
   if (!v.videoWidth) return showErr('Videokuvaa ei voitu purkaa.');
   if (!isFinite(v.duration)) { v.currentTime = 1e9; await waitEvent(v, 'seeked', 8000).catch(() => { }); }
   S.duration = v.duration;

@@ -375,6 +375,19 @@ function download(name, content, type) {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
+// iPhone/Safari (myös iPhonen Chrome) lataa ennen toistoa vain metatiedot eikä noudata preload-asetusta,
+// jolloin 'loadeddata' ei laukea koskaan. Silloin video käynnistetään hetkeksi äänettömänä ja pysäytetään.
+async function waitFirstFrame(errP) {
+  await Promise.race([waitEvent(v, 'loadedmetadata', 20000), errP]);
+  if (v.readyState >= 2) return;
+  const ld = waitEvent(v, 'loadeddata', 15000); ld.catch(() => { });
+  const wasMuted = v.muted; v.muted = true;
+  try { await v.play(); } catch (e) { }
+  try { await Promise.race([ld, errP]); } finally { v.pause(); v.muted = wasMuted; }
+}
+function loadErrText(e) {
+  return /aikakatkaisu/.test(e.message) ? 'Videon lataus ei edennyt (aikakatkaisu). Kokeile uudelleen tai lyhyempää videopätkää.' : e.message;
+}
 function waitEvent(el, name, timeout) {
   return new Promise((res, rej) => {
     const on = () => { clearTimeout(t); el.removeEventListener(name, on); res(); };
@@ -559,8 +572,8 @@ async function loadFile(file) {
   const errP = new Promise((_, rej) => v.addEventListener('error', () => rej(new Error(mediaErr())), { once: true }));
   v.src = S.url;
   try {
-    await Promise.race([waitEvent(v, 'loadeddata', 20000), errP]);
-  } catch (e) { S.loading = false; showCodecError(file, e.message); return; }
+    await waitFirstFrame(errP);
+  } catch (e) { S.loading = false; showCodecError(file, loadErrText(e)); return; }
   if (!v.videoWidth) { S.loading = false; showCodecError(file, 'Selain purki tiedoston, mutta videokuvaa ei löytynyt (todennäköisesti vain ääni purkautui).'); return; }
   if (!isFinite(v.duration)) {  // esim. MediaRecorder-webm ilman kestoa
     v.currentTime = 1e9; await waitEvent(v, 'seeked', 8000).catch(() => { });
