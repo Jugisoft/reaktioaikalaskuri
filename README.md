@@ -32,6 +32,23 @@ Työkalusta on kaksi versiota, jotka käyttävät samaa tallennusmuotoa:
 - Läppärillä: `reaktioaika.html` → **Asetukset → Tuo / yhdistä JSON**. Duplikaatteja ei synny (UUID), joten saman tiedoston voi tuoda uudelleen.
 - CSV:n voi jakaa myös suoraan puhelimesta (*Jaa CSV*).
 
+### Usean valmentajan tietojen yhdistäminen
+Jokaisen tiedot ovat omassa laitteessa. Yhdistäminen toimii varmuuskopiotiedostoilla (JSON), ja **kuka tahansa voi yhdistää**: se, joka tuo toisen tiedoston, saa itselleen molempien tiedot.
+
+1. **Sopikaa kokoaja:** yksi henkilö, jonka laitteelle kaikki tiedot kootaan ja josta otetaan Power BI:n CSV.
+2. **Muut lähettävät:** mobiilissa *Jaa varmuuskopio* (läppärillä *Asetukset → Vie JSON-varmuuskopio*) → lähetä tiedosto kokoajalle, esim. WhatsAppilla tai Driveen.
+3. **Kokoaja tallentaa tiedoston** laitteelleen (WhatsAppissa: avaa tiedosto → *Tallenna* / *Lataa*).
+4. **Kokoaja tuo tiedoston:**
+   - puhelimessa: etusivu → *Tiedot* → **Tuo JSON** → valitse tiedosto
+   - läppärillä: `reaktioaika.html` → *Asetukset* → **Tuo / yhdistä JSON**
+5. Sovellus kertoo, montako toistoa tuli uutena ja montako duplikaattia ohitettiin.
+
+Hyvä tietää:
+- **Duplikaatteja ei synny.** Jokaisella toistolla on oma tunniste, joten saman tiedoston voi tuoda uudelleen ilman haittaa. Kannattaa aina lähettää koko varmuuskopio.
+- **Samanniminen pelaaja yhdistetään**, joten sopikaa nimien kirjoitusasu (esim. *Matti Virtanen*, ei välillä *Matti V.*).
+- **Muokkaukset:** jos samaa toistoa on muokattu kahdessa paikassa, uudempi muokkaus jää voimaan.
+- Jos kaikki tuovat kaikkien tiedostot, kaikilla on sama kokonaisuus. Tämäkin toimii.
+
 > **Tietojen säilyvyys:** tiedot ovat puhelimen selaimen tallennustilassa. Jos sovellus poistetaan tai selaimen tiedot tyhjennetään, tiedot katoavat. Jaa varmuuskopio säännöllisesti. iPhonella kotinäytön sovelluksella ja Safarin välilehdellä on eri tallennustilat, joten käytä aina kuvaketta.
 
 ### Julkaisu GitHub Pagesiin
