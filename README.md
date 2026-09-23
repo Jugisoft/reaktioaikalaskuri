@@ -13,7 +13,7 @@ Työkalusta on kaksi versiota, jotka käyttävät samaa tallennusmuotoa:
 
 ### Asennus (kerran per puhelin)
 1. Avaa puhelimen selaimessa sovelluksen osoite, esim. `https://<käyttäjä>.github.io/reaktioaikalaskuri/`.
-2. **Android (Chrome):** napauta *Asenna* tai valikosta *Lisää aloitusnäyttöön*. **iPhone (Safari):** *Jaa → Lisää Koti-valikkoon*.
+2. **Android (Chrome):** napauta sovelluksen *Asenna*-nappia tai valitse Chromen valikosta *Lisää aloitusnäyttöön*. **iPhone (Chrome tai Safari):** napauta *Jaa*-kuvaketta (Chromessa osoiterivin oikeassa reunassa tai ⋯ → *Jaa…*, Safarissa alapalkissa) → *Lisää Koti-valikkoon*. Jos vaihtoehtoa ei näy, vieritä jakovalikon loppuun → *Muokkaa toimintoja*.
 3. Avaa sovellus jatkossa **aina kotinäytön kuvakkeesta**. Sen jälkeen se toimii myös ilman nettiä.
 
 ### Käyttö treeneissä
