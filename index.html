@@ -290,7 +290,7 @@ const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const hasRVFC = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
 const FPS_SNAP = [23.976, 24, 25, 29.97, 30, 48, 50, 59.94, 60, 90, 100, 119.88, 120, 180, 200, 239.76, 240, 480, 960];
-const APP_VERSION = '2026-09-23.4 (analyysi)';
+const APP_VERSION = '2026-09-23.5 (analyysi)';
 const PESAT = ['Kotipesä', '1-pesä', '2-pesä', '3-pesä'];
 const MK = ['t0', 't1', 't2'];
 const MCOL = { t0: '#eda100', t1: '#1baf7a', t2: '#eb6834' };
@@ -1116,6 +1116,7 @@ window.addEventListener('beforeunload', e => { if (MK.some(k => S.marks[k])) { e
   $('#inDate').value = todayISO();
   $('#inSession').value = data.settings.lastSession || '';
   $('#inMarker').value = data.settings.merkitsija || '';
+  if (TEST_DB) { document.title += ' (TESTI)'; $$('#scrHome h1, #scrStats h1').forEach(h => h.insertAdjacentHTML('beforeend', ' <span style="background:var(--warn);color:#000;border-radius:6px;padding:0 8px;font-size:14px;vertical-align:middle">TESTI</span>')); }
   $('#appVer').textContent = APP_VERSION; $$('.appVer').forEach(e => e.textContent = APP_VERSION);
   if (isIOS && !standalone) {
     const chrome = /CriOS/.test(navigator.userAgent);

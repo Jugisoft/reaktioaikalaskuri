@@ -23,6 +23,9 @@
   <h1>Mobiiliversion (index.html) automaattitestit</h1>
   <p class="info">Puhelinkokoinen näkymä (390×780). Testi napauttaa oikeita kosketusnappeja ja tarkistaa videosta, että näkyvä kuva on oikea. Lopuksi tarkistetaan, että läppäriversio näkee samat toistot. Testit käyttävät erillistä testitietokantaa.</p>
   <button id="run">Aja testit</button>
+  <button id="demo" style="background:#199e70">📊 Luo demodata ja avaa analyysi</button>
+  <button id="clearDemo" style="background:#2d2d2a;border:1px solid #383835">Tyhjennä testitietokanta</button>
+  <p class="info">Demodata tallentuu vain erilliseen testitietokantaan, ei oikeisiin merkintöihisi. Puhelimella näkymää on mukavampi käyttää koko ruudulla: <a href="../index.html?db=testi" style="color:#5598e7">avaa testitietokanta omana sivunaan</a> (otsikossa lukee TESTI).</p>
   <div id="summary"></div>
   <div id="log"></div>
 </div>
@@ -156,7 +159,79 @@ async function runTests() {
   document.getElementById('summary').innerHTML = fail ? `<span class="fail">${fail} epäonnistui</span>, ${pass} ok` : `<span class="ok">Kaikki ${pass} tarkistusta ok</span>`;
   window.TEST_RESULT = { pass, fail };
 }
-document.getElementById('run').onclick = () => runTests().catch(e => { log('VIRHE: ' + e.stack, 'fail'); window.TEST_RESULT = { error: String(e) }; });
+/* ---------- Demodata analyysin kokeiluun ---------- */
+function isoDay(offset) { const d = new Date(); d.setDate(d.getDate() - offset); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); }
+async function appReady() {
+  const f = document.getElementById('app');
+  for (let i = 0; i < 100; i++) { const MA = f.contentWindow.MA; if (MA && MA.data.types.length) return MA; await sleep(100); }
+  throw new Error('Sovellus ei latautunut');
+}
+async function reloadApp() {
+  const f = document.getElementById('app');
+  f.src = '../index.html?db=testi&t=' + Date.now();
+  await new Promise(r => f.onload = r);
+  return appReady();
+}
+async function clearTestDb() {
+  const MA = await appReady();
+  for (const s of ['players', 'reps', 'videos', 'settings']) await MA.DB.clear(s);
+}
+async function seedDemo() {
+  document.getElementById('summary').textContent = 'Luodaan demodataa…';
+  await clearTestDb();
+  const MA = await appReady();
+  let seed = 11; const rnd = () => (seed = seed * 16807 % 2147483647) / 2147483647;
+  const gauss = () => { let s = 0; for (let i = 0; i < 6; i++) s += rnd(); return s - 3; };   // ~N(0,0.7)
+  // pelaaja: lähtöajan perustaso (ms), reaktion osuus, kehitys ms/viikko, hajonta
+  const roster = [
+    ['Aaltonen', 300, 0.40, 4, 14], ['Björk', 318, 0.44, 1, 20], ['Heikkilä', 345, 0.43, 6, 18],
+    ['Lahtinen', 330, 0.38, 2, 12], ['Mäkelä', 360, 0.47, 7, 24], ['Virta', 312, 0.41, 3, 16]];
+  const now = new Date().toISOString(), players = [];
+  roster.forEach(([n], i) => players.push({ id: crypto.randomUUID ? crypto.randomUUID() : 'p' + i + Date.now(), nimi: n, luotu: new Date(Date.now() - (10 - i) * 1000).toISOString() }));
+  // harjoitukset: tiistai- ja torstaityyliin noin 6 viikon ajan, viimeisin tänään
+  const offsets = [0, 2, 7, 9, 14, 16, 21, 23, 28, 30, 35, 37];
+  const plan = [['syotto', '1-pesä', 0], ['syotto', '2-pesä', 12], ['osuma', '2-pesä', 25], ['signaali', '3-pesä', 40]];   // lisäviive ms
+  const reps = [];
+  for (const off of offsets) {
+    const pvm = isoDay(off), weeks = off / 7;
+    const session = off % 7 === 0 ? 'Tiistain lähtöharjoitus' : 'Torstain peliharjoitus';
+    for (const [pi, p] of players.entries()) {
+      const [, base, rShare, gain, sd] = roster[pi];
+      for (const [tid, pesa, extra] of plan) {
+        if (rnd() < 0.25) continue;   // kaikki eivät tee joka harjoitetta joka kerta
+        const k = 2 + Math.floor(rnd() * 3);
+        for (let i = 0; i < k; i++) {
+          const L = base + extra + gain * weeks + gauss() * sd;
+          let R = L * rShare + gauss() * sd * 0.8;
+          if (tid === 'syotto' && rnd() < 0.04) R = -20 - rnd() * 60;   // ennakointi / varaslähtö
+          const hasT1 = rnd() > 0.1;
+          const t0 = 1000 + i * 3000, T = L - R;
+          reps.push({
+            id: crypto.randomUUID ? crypto.randomUUID() : 'r' + reps.length + Date.now(), pvm, harjoitus: session,
+            pelaajaId: p.id, pelaaja: p.nimi, tilanneId: tid, tilanne: MA.data.types.find(t => t.id === tid)?.nimi || tid, pesa,
+            video: `demo_${pvm}.mp4`, videoKey: '', kesto_s: 60, fps_toisto: 30, fps_kuvattu: 240, kerroin: 0.125, fps_kuitattu: true,
+            t0: null, t1: null, t2: null,
+            t0_ms: t0, t1_ms: hasT1 ? t0 + R : null, t2_ms: t0 + L,
+            reaktioaika_ms: hasT1 ? R : null, lahtoaika_ms: L, tekniikka_ms: hasT1 ? T : null, tarkkuus_ms: 8.3,
+            hylatty: rnd() < 0.04, merkitsija: 'Demo', kommentti: rnd() < 0.05 ? 'epäselvä kuva' : '', laite: 'demo', luotu: now, muokattu: now,
+          });
+        }
+      }
+    }
+  }
+  await MA.DB.putMany('players', players);
+  await MA.DB.putMany('reps', reps);
+  await MA.DB.putMany('settings', [{ k: 'lastType', v: 'syotto' }, { k: 'lastBase', v: '1-pesä' }, { k: 'lastPlayer', v: players[0].id },
+    { k: 'recentPlayers', v: players.map(p => p.id) }, { k: 'lastExport', v: now }]);
+  const MA2 = await reloadApp();
+  MA2.AF.tid = 'syotto'; MA2.AF.pesa = '1-pesä'; MA2.AF.days = 0;
+  MA2.showScreen('stats');
+  document.getElementById('summary').innerHTML = `<span class="ok">Demodata luotu: ${players.length} pelaajaa, ${reps.length} toistoa, ${offsets.length} harjoitusta.</span> Analyysi on auki puhelin-ikkunassa – kokeile mittaria, suodattimia (⚙-rivi) ja pisteiden napautusta.`;
+}
+document.getElementById('demo').onclick = () => seedDemo().catch(e => log('VIRHE: ' + e.message, 'fail'));
+document.getElementById('clearDemo').onclick = async () => { await clearTestDb(); await reloadApp(); document.getElementById('summary').textContent = 'Testitietokanta tyhjennetty.'; };
+
+document.getElementById('run').onclick =() => runTests().catch(e => { log('VIRHE: ' + e.stack, 'fail'); window.TEST_RESULT = { error: String(e) }; });
 </script>
 </body>
 </html>
