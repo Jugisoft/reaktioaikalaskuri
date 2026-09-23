@@ -1,7 +1,7 @@
 /* Service worker: sovellus toimii offline-tilassa (esim. hallissa ilman verkkoa).
    HTML haetaan ensisijaisesti verkosta, jotta päivitykset tulevat heti käyttöön;
    ilman verkkoa käytetään välimuistia. Videoita ei koskaan välimuisteta eikä lähetetä. */
-const CACHE = 'reaktioaika-v3';
+const CACHE = 'reaktioaika-v4';
 const FILES = ['./', './index.html', './reaktioaika.html', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png', './icons/apple-touch-icon.png'];
 
