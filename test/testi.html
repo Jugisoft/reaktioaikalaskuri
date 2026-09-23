@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="fi">
+<head>
+<meta charset="utf-8">
+<title>Reaktioaikalaskurin testit</title>
+<style>
+  :root{color-scheme:dark}
+  body{margin:0;background:#121211;color:#f4f3ee;font:13px/1.45 system-ui,"Segoe UI",sans-serif;display:grid;grid-template-columns:460px 1fr;height:100vh}
+  #left{overflow:auto;padding:12px 14px;border-right:1px solid #383835}
+  h1{font-size:16px;margin:0 0 8px}
+  button{background:#3987e5;color:#fff;border:0;border-radius:6px;padding:6px 12px;cursor:pointer;margin:0 6px 6px 0}
+  button.sec{background:#2d2d2a;border:1px solid #383835}
+  #log div{padding:2px 0;border-bottom:1px solid #232321;white-space:pre-wrap}
+  .ok{color:#1baf7a}.fail{color:#e66767;font-weight:700}.info{color:#c3c2b7}.head{color:#eda100;font-weight:700;margin-top:6px}
+  #summary{font-size:15px;font-weight:700;margin:8px 0}
+  iframe{width:100%;height:100%;border:0}
+</style>
+</head>
+<body>
+<div id="left">
+  <h1>Reaktioaikalaskurin automaattitestit</h1>
+  <p class="info">Testi luo videot, joissa T0/T1/T2 ovat tunnetuissa kuvissa. Se ajaa merkinnän oikeilla näppäinpainalluksilla sovelluksessa (oikealla) ja vertaa tuloksia odotettuihin (±1 kuva).</p>
+  <button id="run">Aja testit</button>
+  <button id="dl" class="sec">Lataa testivideot (.webm)</button>
+  <button id="clear" class="sec">Tyhjennä testitietokanta</button>
+  <p class="info">Testit käyttävät omaa tietokantaansa (<code>reaktioaikalaskuri-testi</code>), joka tyhjennetään jokaisen ajon alussa. Oikeisiin merkintöihin ne eivät koske.</p>
+  <div id="summary"></div>
+  <div id="log"></div>
+</div>
+<iframe id="app" src="../reaktioaika.html?db=testi"></iframe>
+<script src="testivideo.js"></script>
+<script>
+'use strict';
+const logEl = document.getElementById('log');
+let pass = 0, fail = 0;
+function log(msg, cls = 'info') { const d = document.createElement('div'); d.className = cls; d.textContent = msg; logEl.appendChild(d); d.scrollIntoView({ block: 'nearest' }); }
+function check(cond, msg) { if (cond) { pass++; log('✔ ' + msg, 'ok'); } else { fail++; log('✘ ' + msg, 'fail'); } return cond; }
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const blobs = {};
+
+async function getBlob(spec) {
+  if (!blobs[spec.name]) { log(`Luodaan ${spec.name} (${spec.frames} kuvaa)…`); blobs[spec.name] = await generateVideo(spec); log(`  ${spec.name}: ${(blobs[spec.name].size / 1024).toFixed(0)} kt`); }
+  return blobs[spec.name];
+}
+document.getElementById('dl').onclick = async () => {
+  for (const s of TEST_SPECS) { const b = await getBlob(s); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = s.name; a.click(); await sleep(300); }
+};
+
+async function runTests() {
+  pass = fail = 0; logEl.innerHTML = ''; document.getElementById('summary').textContent = 'Käynnissä…';
+  const W_ = document.getElementById('app').contentWindow, D = W_.document, RA = W_.RA;
+  const key = async (k, opts = {}) => {
+    D.body.dispatchEvent(new W_.KeyboardEvent('keydown', { key: k, code: k === ' ' ? 'Space' : '', bubbles: true, cancelable: true, ...opts }));
+    await RA.idle();
+  };
+  const vid = D.getElementById('v');
+  const shown = () => readFrameNumber(vid);
+
+  // Yksikkötesti: fps-tunnistus aikaeroista
+  log('fps-tunnistuksen yksikkötesti', 'head');
+  check(RA.fpsFromTimes([0, 0.004, 0.008, 0.013, 0.017, 0.021, 0.025, 0.029, 0.033]) === 240, 'ms-pyöristetyt 240 fps -aikaleimat → 240');
+  check(RA.fpsFromTimes([0, 1 / 30, 3 / 30, 4 / 30, 5 / 30, 7 / 30, 8 / 30]) === 30, 'pudonneet kuvat 30 fps → 30');
+  check(RA.fpsFromTimes([0, 1 / 29.97, 2 / 29.97, 3 / 29.97, 4 / 29.97]) === 29.97, '29,97 fps → 29,97');
+
+  // tyhjä lähtötilanne joka ajolla (oma testitietokanta, ei koske oikeisiin merkintöihin)
+  await clearTestDb();
+
+  const allTestReps = [];
+  for (const spec of TEST_SPECS) {
+    log(`${spec.label} – ${spec.name}`, 'head');
+    const blob = await getBlob(spec);
+    await RA.loadFile(new W_.File([blob], spec.name, { type: 'video/webm' }));
+    await RA.idle();
+    if (!check(RA.S.ready, 'video avautui')) continue;
+    check(RA.S.fpsDetected === spec.fps, `fps tunnistettu automaattisesti: ${RA.S.fpsDetected} (odotettu ${spec.fps})`);
+    if (RA.S.fpsFile !== spec.fps) { D.getElementById('inFps').value = spec.fps; RA.onFpsChange(); }
+    const sel = D.getElementById('selCap');
+    sel.value = spec.capFps ? String(spec.capFps) : ''; sel.dispatchEvent(new W_.Event('change'));
+    const cap = spec.capFps || spec.fps;
+    check(Math.abs(RA.S.fpsFile / (RA.S.fpsCaptured || RA.S.fpsFile) - spec.fps / cap) < 1e-9, `hidastuskerroin ${cap / spec.fps}×`);
+    check(readFrameNumber(vid) === 0 && RA.S.curFrame === 0, 'alussa kuva 0');
+
+    for (const [ri, rep] of spec.reps.entries()) {
+      const p = await RA.addPlayer(rep.player); RA.renderPlayerSelect();
+      D.getElementById('selPlayer').value = p.id; D.getElementById('selType').value = rep.type; D.getElementById('selBase').value = rep.type === 'signaali' ? '3-pesä' : '1-pesä';
+      D.getElementById('inDate').value = ri === 0 ? '2026-09-01' : '2026-09-15';
+      D.getElementById('inSession').value = 'Automaattitesti';
+      // T0: siirry 12 kuvaa ennen, Shift+→ (10) ja → → (2)
+      await RA.gotoFrame(rep.t0 - 12); await RA.idle();
+      await key('ArrowRight', { shiftKey: true }); await key('ArrowRight'); await key('ArrowRight');
+      const f0 = shown();
+      check(f0 === rep.t0 && RA.S.curFrame === rep.t0, `näppäinselaus → kuva ${rep.t0}: videossa näkyy ${f0}, sovellus näyttää ${RA.S.curFrame}`);
+      await key('q');
+      // T1: 3 kuvaa yli ja ← ← ←
+      await RA.gotoFrame(rep.t1 + 3); await RA.idle();
+      await key('ArrowLeft'); await key('ArrowLeft'); await key('ArrowLeft');
+      const f1 = shown();
+      check(f1 === rep.t1 && RA.S.curFrame === rep.t1, `← ×3 → kuva ${rep.t1}: videossa ${f1}, sovellus ${RA.S.curFrame}`);
+      await key('w');
+      // T2: suoraan
+      await RA.gotoFrame(rep.t2); await RA.idle();
+      const f2 = shown();
+      check(f2 === rep.t2 && RA.S.curFrame === rep.t2, `siirto kuvaan ${rep.t2}: videossa ${f2}`);
+      await key('e');
+      if (rep.rej) await key('h');
+      if (rep.comment) D.getElementById('comment').value = rep.comment;
+      const before = RA.data.reps.length;
+      await key('Enter'); await sleep(50);
+      check(RA.data.reps.length === before + 1, 'Enter tallensi toiston');
+      const saved = RA.data.reps[RA.data.reps.length - 1];
+      allTestReps.push(saved);
+      const oneFrame = 1000 / cap;
+      const expR = (rep.t1 - rep.t0) / cap * 1000, expL = (rep.t2 - rep.t0) / cap * 1000, expT = (rep.t2 - rep.t1) / cap * 1000;
+      const ok = (got, exp) => got != null && Math.abs(got - exp) <= oneFrame + 0.6;
+      check(ok(saved.reaktioaika_ms, expR), `reaktioaika ${saved.reaktioaika_ms?.toFixed(2)} ms, odotettu ${expR.toFixed(2)} ms (±${oneFrame.toFixed(1)})`);
+      check(ok(saved.lahtoaika_ms, expL), `lähtöaika ${saved.lahtoaika_ms?.toFixed(2)} ms, odotettu ${expL.toFixed(2)} ms`);
+      check(ok(saved.tekniikka_ms, expT), `tekniikka ${saved.tekniikka_ms?.toFixed(2)} ms, odotettu ${expT.toFixed(2)} ms`);
+      check(Math.abs(saved.tarkkuus_ms - 2000 / cap) < 0.01, `tarkkuus ±${saved.tarkkuus_ms.toFixed(2)} ms (2 × 1000/${cap})`);
+      if (rep.rej) check(saved.hylatty === true, 'H-näppäin merkitsi hylätyksi');
+      if (expR < 0) check(saved.reaktioaika_ms < 0 && !!D.querySelector('#videoReps .negv'), 'negatiivinen reaktioaika tallentui ja korostetaan');
+    }
+
+    // Kumoa (Ctrl+Z)
+    await RA.gotoFrame(10); await RA.idle(); await key('q'); await RA.gotoFrame(12); await RA.idle(); await key('w');
+    await key('z', { ctrlKey: true });
+    check(RA.S.marks.t1 === null && RA.S.marks.t0?.f === 10, 'Ctrl+Z kumosi viimeisimmän merkinnän (T1), T0 säilyi');
+    await key('z', { ctrlKey: true });
+
+    // Ääniehdotus
+    if (spec.audio) {
+      for (let i = 0; i < 50 && !(RA.S.audio); i++) await sleep(100);
+      if (check(!!RA.S.audio && !RA.S.audio.silent, 'ääniraita purettu (decodeAudioData)')) {
+        const rep = spec.reps[0];
+        await RA.gotoFrame(rep.t0 + Math.round(spec.fps * 0.1)); await RA.idle();
+        await key('a');
+        const sug = RA.S.suggestion;
+        const expT = rep.t0 / spec.fps;
+        check(sug && Math.abs(sug.t - expT) <= 1 / spec.fps, `ääniehdotus ${sug ? (sug.t * 1000).toFixed(1) : '–'} ms, napsahdus ${(expT * 1000).toFixed(1)} ms (ero ${sug ? ((sug.t - expT) * 1000).toFixed(1) : '–'} ms, sallittu ±${(1000 / spec.fps).toFixed(1)})`);
+        await key('a');
+        check(RA.S.marks.t0?.src === 'ääni', 'toinen A-painallus hyväksyi ehdotuksen T0:ksi');
+        await key('z', { ctrlKey: true });
+      }
+    }
+  }
+
+  // CSV
+  log('CSV-vienti', 'head');
+  const csv = RA.buildCSV(allTestReps);
+  check(csv.charCodeAt(0) === 0xFEFF, 'UTF-8 BOM alussa');
+  const lines = csv.slice(1).split('\r\n').filter(Boolean);
+  const header = 'toisto_id;pvm;harjoitus;pelaaja;tilanne;video;fps_kuvattu;t0_ms;t1_ms;t2_ms;reaktioaika_ms;lahtoaika_ms;tekniikka_ms;tarkkuus_ms;hylatty;merkitsija;kommentti;pesa';
+  check(lines[0] === header, 'otsikkorivi täsmää määrittelyyn');
+  check(lines.length === allTestReps.length + 1, `rivejä ${lines.length - 1} = toistoja ${allTestReps.length}`);
+  const parse = line => { const out = []; let cur = '', q = false; for (let i = 0; i < line.length; i++) { const c = line[i]; if (q) { if (c === '"' && line[i + 1] === '"') { cur += '"'; i++; } else if (c === '"') q = false; else cur += c; } else if (c === '"') q = true; else if (c === ';') { out.push(cur); cur = ''; } else cur += c; } out.push(cur); return out; };
+  const rows = lines.slice(1).map(parse);
+  check(rows.every(r => r.length === 18), 'jokaisella rivillä 18 kenttää (lainausmerkit ja ; kommentissa käsitelty)');
+  const col = n => header.split(';').indexOf(n);
+  check(rows.every(r => /^-?\d+,\d$/.test(r[col('reaktioaika_ms')]) && /^-?\d+,\d$/.test(r[col('lahtoaika_ms')])), 'ms-arvot desimaalipilkulla, 1 desimaali (esim. ' + rows[0][col('reaktioaika_ms')] + ')');
+  check(rows.some(r => r[col('reaktioaika_ms')].startsWith('-')), 'negatiivinen arvo viedään miinusmerkillä');
+  check(rows.some(r => r[col('kommentti')] === 'testi; "lainaus" – ääkköset'), 'kommentti ; ja " -merkkeineen säilyi');
+  check(rows.some(r => r[col('hylatty')] === '1') && rows.some(r => r[col('hylatty')] === '0'), 'hylatty 1/0');
+  check(rows.some(r => r[col('fps_kuvattu')] === '240'), 'fps_kuvattu 240 slow-mo-riveillä');
+  check(rows.every(r => /^[0-9a-f-]{36}$/.test(r[0])), 'toisto_id on UUID');
+  check(rows.some(r => r[col('pesa')] === '3-pesä') && rows.some(r => r[col('pesa')] === '1-pesä'), 'pesa-sarake täyttyy');
+  log('Esimerkkirivi: ' + lines[1], 'info');
+
+  // JSON-varmuuskopio
+  log('JSON-vienti ja -tuonti', 'head');
+  const json = RA.buildJSON();
+  const n0 = RA.data.reps.length;
+  const res = await RA.importJSON(json);
+  check(res.added === 0 && res.dup === n0 && RA.data.reps.length === n0, `saman varmuuskopion tuonti: ${res.added} uutta, ${res.dup} duplikaattia ohitettu`);
+  const o = JSON.parse(json); const fake = { ...o.toistot[o.toistot.length - 1], id: 'ffffffff-ffff-4fff-bfff-ffffffffffff', muokattu: new Date().toISOString() };
+  o.toistot = [fake]; o.pelaajat = o.pelaajat.map(p => ({ ...p, id: 'toisen-valmentajan-' + p.id }));
+  const res2 = await RA.importJSON(JSON.stringify(o));
+  check(res2.added === 1 && res2.players === 0, 'toisen valmentajan toisto yhdistyi, samanniminen pelaaja ei monistunut');
+  await RA.DB.del('reps', fake.id); RA.data.reps = RA.data.reps.filter(r => r.id !== fake.id);
+
+  // tilastot
+  const st = RA.stats([200, 180, 220, 190, 500]);
+  check(st.med === 200 && st.n === 5 && st.min === 180, 'tilastot: mediaani 200, paras 180');
+
+  document.getElementById('summary').innerHTML = fail ? `<span class="fail">${fail} epäonnistui</span>, ${pass} ok` : `<span class="ok">Kaikki ${pass} tarkistusta ok</span>`;
+  window.TEST_RESULT = { pass, fail };
+  return { pass, fail };
+}
+async function clearTestDb() {
+  const RA = document.getElementById('app').contentWindow.RA;
+  for (const s of ['players', 'reps', 'videos', 'settings']) await RA.DB.clear(s);
+  RA.data.players = []; RA.data.reps = []; RA.data.videos.clear(); RA.data.settings = { aaniEtaisyys: 0 };
+}
+document.getElementById('clear').onclick = async () => {
+  await clearTestDb(); document.getElementById('app').contentWindow.location.reload();
+  logEl.innerHTML = ''; document.getElementById('summary').textContent = 'Testitietokanta tyhjennetty.';
+};
+document.getElementById('run').onclick =() => runTests().catch(e => { log('VIRHE: ' + e.stack, 'fail'); window.TEST_RESULT = { error: String(e) }; });
+</script>
+</body>
+</html>

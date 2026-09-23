@@ -1,0 +1,1587 @@
+<!doctype html>
+<html lang="fi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Reaktioaikalaskuri</title>
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#121211; --surface:#1a1a19; --surface2:#232321; --surface3:#2d2d2a; --border:#383835;
+  --text:#f4f3ee; --text2:#c3c2b7; --muted:#8d8c84;
+  --accent:#3987e5; --accent2:#5598e7;
+  --t0:#eda100; --t1:#1baf7a; --t2:#eb6834; --sug:#e87ba4;
+  --neg:#e66767; --warn:#eda100; --ok:#1baf7a;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300; --s7:#9085e9; --s8:#e66767;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;display:flex;flex-direction:column;background:var(--bg);color:var(--text);font:13px/1.4 system-ui,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+button{background:var(--surface3);border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;white-space:nowrap}
+button:hover{background:#3a3a36}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+button.primary:hover{background:var(--accent2)}
+button.ghost{background:transparent;border-color:transparent}
+button.ghost:hover{background:var(--surface3)}
+button.small{padding:1px 7px;font-size:12px}
+button:disabled{opacity:.45;cursor:default}
+input[type=text],input[type=number],input[type=date],select,textarea{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 7px;min-width:0}
+input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:-1px}
+kbd{display:inline-block;min-width:18px;padding:0 5px;border:1px solid var(--border);border-bottom-width:2px;border-radius:4px;background:var(--surface2);font:11px/16px ui-monospace,Consolas,monospace;text-align:center;color:var(--text2)}
+.mono{font-family:ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)} .t2c{color:var(--text2)}
+[hidden]{display:none!important}
+
+/* header */
+header{display:flex;align-items:center;gap:10px;padding:6px 12px;background:var(--surface);border-bottom:1px solid var(--border);flex:none}
+header h1{font-size:15px;margin:0 8px 0 0;white-space:nowrap}
+.tabs{display:flex;gap:2px}
+.tabs button{background:transparent;border:none;border-radius:6px;padding:5px 12px;color:var(--text2)}
+.tabs button.active{background:var(--surface3);color:var(--text);font-weight:600}
+header .grow{flex:1}
+#fileName{color:var(--text2);max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+main{flex:1;min-height:0;display:flex}
+.view{display:none;flex:1;min-width:0;min-height:0}
+.view.active{display:flex}
+
+/* marking view */
+#view-mark{display:none}
+#view-mark.active{display:grid;grid-template-columns:minmax(0,1fr) 318px}
+.left{display:flex;flex-direction:column;min-width:0;min-height:0}
+.stage{position:relative;flex:1;min-height:120px;background:#000;overflow:hidden;cursor:grab}
+.stage.panning{cursor:grabbing}
+.stage video{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:contain;transform-origin:0 0;pointer-events:none}
+.hud{position:absolute;left:8px;top:8px;display:flex;gap:6px;pointer-events:none;flex-wrap:wrap}
+.hud span{background:rgba(0,0,0,.72);padding:2px 8px;border-radius:5px;font-size:13px}
+.hud .mk{font-weight:700;color:#000}
+.drop{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--text2);text-align:center;padding:20px;cursor:default}
+.drop .big{font-size:18px;color:var(--text)}
+body.dragging .stage::after{content:"Pudota video tähän";position:absolute;inset:10px;border:3px dashed var(--accent);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;background:rgba(57,135,229,.15);color:#fff}
+.errbox{position:absolute;inset:0;overflow:auto;background:rgba(18,18,17,.97);padding:24px 28px;cursor:default}
+.errbox h2{color:var(--neg);margin:0 0 8px;font-size:17px}
+.errbox pre{background:var(--surface2);border:1px solid var(--border);padding:8px 10px;border-radius:6px;white-space:pre-wrap;word-break:break-all;user-select:all}
+.controls{display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--surface);border-top:1px solid var(--border);flex-wrap:wrap;flex:none}
+.controls .sep{width:1px;height:20px;background:var(--border);margin:0 2px}
+.frameinfo{font-size:13px;margin-left:auto;white-space:nowrap}
+.frameinfo b{color:var(--text)}
+#timeline{display:block;width:100%;height:118px;background:var(--surface);border-top:1px solid var(--border);cursor:crosshair;flex:none;touch-action:none}
+
+.side{overflow-y:auto;background:var(--surface);border-left:1px solid var(--border);padding:8px 10px 16px}
+.sec{border-bottom:1px solid var(--border);padding:8px 0}
+.sec:last-child{border-bottom:none}
+.sec h3{margin:0 0 6px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between;align-items:center}
+.row{display:flex;gap:6px;align-items:center;margin:4px 0}
+.row>label:first-child{width:78px;flex:none;color:var(--text2)}
+.row>select,.row>input{flex:1}
+.mrow{display:grid;grid-template-columns:34px 1fr auto;gap:6px;align-items:center;margin:3px 0}
+.tag{display:inline-block;font-weight:700;border-radius:4px;padding:0 5px;color:#000;text-align:center;font-size:12px}
+.tag.t0{background:var(--t0)} .tag.t1{background:var(--t1)} .tag.t2{background:var(--t2)} .tag.sug{background:var(--sug)}
+.mval{font-size:12px}
+.mval.empty{color:var(--muted)}
+.res{display:grid;grid-template-columns:1fr auto;gap:2px 8px;font-size:13px}
+.res .v{font-weight:700;text-align:right}
+.res .v.neg{color:var(--neg)}
+.negnote{background:rgba(230,103,103,.15);border:1px solid var(--neg);border-radius:6px;padding:4px 7px;margin-top:6px;font-size:12px}
+.warnnote{background:rgba(237,161,0,.12);border:1px solid var(--warn);border-radius:6px;padding:4px 7px;margin-top:6px;font-size:12px}
+.hint{font-size:12px;color:var(--muted);margin-top:4px}
+.editbanner{background:rgba(57,135,229,.18);border:1px solid var(--accent);border-radius:6px;padding:5px 8px;margin-bottom:6px;font-size:12px}
+.replist{list-style:none;margin:0;padding:0;max-height:220px;overflow:auto}
+.replist li{display:flex;gap:6px;align-items:center;padding:3px 4px;border-radius:5px;font-size:12px}
+.replist li:hover{background:var(--surface3)}
+.replist li .txt{flex:1;cursor:pointer;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.replist li.rej .txt{text-decoration:line-through;color:var(--muted)}
+.chk{display:flex;align-items:center;gap:6px;margin:6px 0}
+
+/* data views */
+.page{flex:1;overflow:auto;padding:14px 18px 40px}
+.page h2{font-size:16px;margin:4px 0 10px}
+.filters{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:12px}
+.filters label{color:var(--text2)}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chip{border-radius:14px;padding:2px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);font-size:12px}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+table.data{border-collapse:collapse;width:100%;font-size:13px}
+table.data th,table.data td{padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
+table.data th{color:var(--muted);font-weight:600;font-size:12px;position:sticky;top:0;background:var(--bg)}
+table.data td.n{text-align:right;font-variant-numeric:tabular-nums}
+table.data th.n{text-align:right}
+table.data td.main{font-weight:700;color:var(--text)}
+table.data tr.rej td{color:var(--muted)}
+table.data td .neg,.negv{color:var(--neg);font-weight:600}
+table.data input[type=text]{width:100%;min-width:140px;padding:2px 5px}
+.badge{display:inline-block;border-radius:4px;padding:0 6px;font-size:11px;font-weight:600}
+.badge.warn{background:rgba(237,161,0,.18);color:var(--warn);border:1px solid rgba(237,161,0,.5)}
+.badge.neg{background:rgba(230,103,103,.15);color:var(--neg);border:1px solid rgba(230,103,103,.5)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin:12px 0}
+.card h3{margin:0 0 2px;font-size:14px}
+.card .sub{color:var(--muted);font-size:12px;margin-bottom:6px}
+.chart svg{display:block;width:100%}
+.chart text{fill:var(--text2);font-size:11px;font-family:system-ui,"Segoe UI",sans-serif}
+.chart .axis line,.chart .grid line{stroke:var(--border)}
+.chart .zero{stroke:var(--muted);stroke-dasharray:3 3}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--text2);margin:4px 0 6px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:0 12px}
+.empty{color:var(--muted);padding:20px;text-align:center}
+.settings{max-width:820px}
+.settings .card .row>label:first-child{width:170px}
+.list{list-style:none;margin:6px 0;padding:0}
+.list li{display:flex;gap:6px;align-items:center;padding:3px 0;border-bottom:1px solid var(--border)}
+.list li input{flex:1}
+
+#tip{position:fixed;z-index:50;pointer-events:none;background:#000;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px;white-space:pre;max-width:360px;box-shadow:0 4px 14px rgba(0,0,0,.5)}
+#toasts{position:fixed;right:14px;bottom:14px;z-index:60;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+.toast{background:var(--surface3);border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:6px;padding:7px 12px;max-width:420px;box-shadow:0 4px 14px rgba(0,0,0,.5)}
+.toast.ok{border-left-color:var(--ok)} .toast.err{border-left-color:var(--neg)} .toast.warn{border-left-color:var(--warn)}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:40;display:flex;align-items:center;justify-content:center;padding:16px}
+.dialog{background:var(--surface);border:1px solid var(--border);border-radius:10px;max-width:760px;width:100%;max-height:92vh;overflow:auto;padding:16px 20px}
+.dialog h2{margin:0 0 8px;font-size:16px}
+.keys{display:grid;grid-template-columns:repeat(2,1fr);gap:2px 24px}
+.keys div{display:flex;justify-content:space-between;gap:10px;padding:3px 0;border-bottom:1px solid var(--border)}
+@media (max-width:1100px){ #view-mark.active{grid-template-columns:minmax(0,1fr) 286px} .frameinfo{font-size:12px} }
+</style>
+</head>
+<body>
+<header>
+  <h1>Reaktioaikalaskuri</h1>
+  <nav class="tabs" id="tabs">
+    <button data-view="mark" class="active">Merkintä</button>
+    <button data-view="reps">Toistot</button>
+    <button data-view="results">Tulokset</button>
+    <button data-view="settings">Asetukset</button>
+  </nav>
+  <div class="grow"></div>
+  <span id="fileName"></span>
+  <button id="btnOpen" class="primary" title="Avaa video (tai raahaa tiedosto ikkunaan)">Avaa video…</button>
+  <input type="file" id="fileInput" accept="video/*,.mov,.mp4,.m4v,.webm,.mkv" hidden>
+  <button id="btnHelp" title="Näppäinoikotiet (?)">?</button>
+</header>
+
+<main>
+<!-- ============ MERKINTÄ ============ -->
+<section class="view active" id="view-mark">
+  <div class="left">
+    <div class="stage" id="stage">
+      <video id="v" playsinline preload="auto"></video>
+      <div class="hud" id="hud" hidden></div>
+      <div class="drop" id="dropHint">
+        <div class="big">Avaa video painikkeesta tai raahaa tiedosto tähän</div>
+        <div>Video käsitellään vain tässä selaimessa – mitään ei lähetetä minnekään.</div>
+        <div><button id="btnOpen2" class="primary">Avaa video…</button></div>
+        <div class="muted">Näppäinoikotiet: <kbd>?</kbd></div>
+      </div>
+      <div class="errbox" id="errBox" hidden></div>
+    </div>
+    <div class="controls">
+      <button id="bBack10" title="10 kuvaa taakse (Shift+←)">⏪ 10</button>
+      <button id="bBack1" title="1 kuva taakse (←)">◀ 1</button>
+      <button id="bPlay" title="Toisto / tauko (välilyönti)" style="min-width:40px">▶</button>
+      <button id="bFwd1" title="1 kuva eteen (→)">1 ▶</button>
+      <button id="bFwd10" title="10 kuvaa eteen (Shift+→)">10 ⏩</button>
+      <span class="sep"></span>
+      <label class="muted" for="rate">Nopeus</label>
+      <select id="rate" title="Toistonopeus ([ ja ])">
+        <option value="0.1">0,1×</option><option value="0.25" selected>0,25×</option><option value="0.5">0,5×</option><option value="1">1×</option>
+      </select>
+      <button id="bMute" title="Ääni päälle/pois (M)">🔊</button>
+      <span class="sep"></span>
+      <span class="muted">Zoom</span> <span id="zoomLbl" class="mono">1,0×</span>
+      <button id="bZoomReset" class="small" title="Palauta zoom (0 tai tuplaklikkaus)">1:1</button>
+      <div class="frameinfo mono" id="frameInfo">–</div>
+    </div>
+    <canvas id="timeline" title="Klikkaa = siirry · raahaa merkkiä = siirrä · oikea klikkaus merkkiin = poista · rulla = zoomaa aikajanaa · tuplaklikkaus = koko video"></canvas>
+  </div>
+
+  <aside class="side" id="side">
+    <div class="editbanner" id="editBanner" hidden>Muokataan tallennettua toistoa. <kbd>Enter</kbd> tallentaa muutokset, <kbd>Esc</kbd> peruu. <button class="small" id="bCancelEdit">Peru</button></div>
+    <div class="sec">
+      <h3>Toisto</h3>
+      <div class="row"><label for="selPlayer">Pelaaja</label><select id="selPlayer"></select><button class="small" id="bAddPlayer" title="Lisää uusi pelaaja">+ Uusi</button></div>
+      <div class="row" id="newPlayerRow" hidden><label></label><input type="text" id="newPlayer" placeholder="Pelaajan nimi"><button class="small primary" id="bAddPlayerOk">Lisää</button></div>
+      <div class="row"><label for="selType">Ärsyke</label><select id="selType"></select></div>
+      <div class="row"><label for="selBase">Pesä</label><select id="selBase"><option value="">– ei valittu –</option><option>Kotipesä</option><option>1-pesä</option><option>2-pesä</option><option>3-pesä</option></select></div>
+      <div class="row"><label for="inDate">Päivämäärä</label><input type="date" id="inDate"></div>
+      <div class="row"><label for="inSession">Harjoitus</label><input type="text" id="inSession" list="sessionList" placeholder="esim. Harj. 14 / lähtöharjoitus"><datalist id="sessionList"></datalist></div>
+    </div>
+    <div class="sec">
+      <h3>Video ja kuvataajuus</h3>
+      <div class="row"><label for="inFps" title="Videotiedoston kuvataajuus eli toisto-fps">Videon fps</label><input type="number" id="inFps" min="1" max="2000" step="0.01" class="mono"><button class="small" id="bDetect" title="Tunnista kuvataajuus uudelleen">Tunnista</button></div>
+      <div class="row"><label for="selCap" title="Kuvaushetken todellinen kuvataajuus (slow-mo)">Kuvattu fps</label>
+        <select id="selCap">
+          <option value="">Sama kuin video (ei hidastusta)</option>
+          <option value="60">60 fps</option><option value="120">120 fps</option><option value="240">240 fps</option><option value="480">480 fps</option><option value="960">960 fps</option>
+          <option value="custom">Muu…</option>
+        </select></div>
+      <div class="row" id="capCustomRow" hidden><label></label><input type="number" id="inCapCustom" min="1" max="10000" step="1" placeholder="kuvattu fps"></div>
+      <div class="hint" id="fpsInfo">–</div>
+    </div>
+    <div class="sec">
+      <h3>Merkinnät <span class="muted" style="text-transform:none;letter-spacing:0">Ctrl+Z kumoa</span></h3>
+      <div id="marks"></div>
+      <div class="hint" id="t0hint"></div>
+      <div class="row" style="margin-top:6px">
+        <button class="small" id="bSuggest" title="Etsi voimakkain äänipiikki nykyisen kohdan läheltä (A)">🔉 Ehdota T0 äänestä <kbd>A</kbd></button>
+        <span class="muted" id="audioStatus" style="font-size:12px"></span>
+      </div>
+      <div id="sugBox" hidden class="warnnote"></div>
+    </div>
+    <div class="sec">
+      <h3>Tulos (todellinen aika)</h3>
+      <div class="res" id="resBox"></div>
+      <div id="resNotes"></div>
+    </div>
+    <div class="sec">
+      <div class="row"><input type="text" id="comment" placeholder="Kommentti (vapaa teksti)" style="flex:1"></div>
+      <label class="chk"><input type="checkbox" id="chkRej"> Hylätty / epävarma merkintä <kbd>H</kbd></label>
+      <div class="row">
+        <button class="primary" id="bSave" style="flex:1">Tallenna toisto <kbd style="color:#fff;background:transparent">Enter</kbd></button>
+        <button id="bClear" title="Tyhjennä merkinnät">Tyhjennä</button>
+      </div>
+    </div>
+    <div class="sec">
+      <h3>Tämän videon toistot <span id="repCount" class="muted"></span></h3>
+      <ul class="replist" id="videoReps"></ul>
+    </div>
+  </aside>
+</section>
+
+<!-- ============ TOISTOT ============ -->
+<section class="view" id="view-reps">
+  <div class="page">
+    <h2>Tallennetut toistot</h2>
+    <div class="filters" data-filters="reps"></div>
+    <div id="repsTable"></div>
+  </div>
+</section>
+
+<!-- ============ TULOKSET ============ -->
+<section class="view" id="view-results">
+  <div class="page">
+    <h2>Tulokset</h2>
+    <div class="filters" data-filters="results"></div>
+    <div id="resultsBody"></div>
+  </div>
+</section>
+
+<!-- ============ ASETUKSET ============ -->
+<section class="view" id="view-settings">
+  <div class="page settings">
+    <h2>Asetukset ja data</h2>
+    <div class="card">
+      <h3>Yleiset</h3>
+      <div class="row"><label for="setMarker">Merkitsijä (nimesi)</label><input type="text" id="setMarker" placeholder="esim. valmentajan nimi"></div>
+      <div class="row"><label for="setDist" title="Ääni kulkee noin 343 m/s. 10 m ≈ 29 ms viive.">Kameran etäisyys lyöjästä (m)</label><input type="number" id="setDist" min="0" max="200" step="0.5" style="max-width:100px"><span class="muted">Äänen viivekorjaus T0-ehdotukseen (343 m/s)</span></div>
+    </div>
+    <div class="card">
+      <h3>Ärsyketyypit</h3>
+      <div class="sub">T0-kuvaus näkyy merkintänäkymässä ohjeena. Käytössä olevaa tyyppiä ei voi poistaa.</div>
+      <ul class="list" id="typeList"></ul>
+      <div class="row"><input type="text" id="newTypeName" placeholder="Uuden ärsykkeen nimi" style="flex:1"><input type="text" id="newTypeT0" placeholder="T0 = mikä ärsyke?" style="flex:2"><button id="bAddType">Lisää</button></div>
+    </div>
+    <div class="card">
+      <h3>Pelaajat</h3>
+      <ul class="list" id="playerList"></ul>
+    </div>
+    <div class="card">
+      <h3>Tiedot</h3>
+      <div class="sub">Tiedot tallentuvat tämän selaimen IndexedDB-tietokantaan. Ota säännöllisesti JSON-varmuuskopio.</div>
+      <div class="row" style="flex-wrap:wrap">
+        <button id="bCsvAll">Vie kaikki CSV (Power BI)</button>
+        <button id="bJsonOut">Vie JSON-varmuuskopio</button>
+        <button id="bJsonIn">Tuo / yhdistä JSON…</button>
+        <input type="file" id="jsonInput" accept=".json,application/json" hidden>
+        <span class="grow"></span>
+        <button id="bWipe" style="border-color:var(--neg);color:var(--neg)">Tyhjennä kaikki tiedot…</button>
+      </div>
+      <div class="hint" id="dbInfo"></div>
+    </div>
+  </div>
+</section>
+</main>
+
+<div class="overlay" id="help" hidden>
+  <div class="dialog">
+    <h2>Näppäinoikotiet</h2>
+    <div class="keys">
+      <div><span>1 kuva taakse / eteen</span><span><kbd>←</kbd> <kbd>→</kbd></span></div>
+      <div><span>10 kuvaa taakse / eteen</span><span><kbd>Shift</kbd>+<kbd>←</kbd> <kbd>→</kbd></span></div>
+      <div><span>Toisto / tauko</span><span><kbd>Välilyönti</kbd></span></div>
+      <div><span>Hitaampi / nopeampi toisto</span><span><kbd>[</kbd> <kbd>]</kbd></span></div>
+      <div><span>T0 – ärsyke</span><span><kbd>Q</kbd></span></div>
+      <div><span>T1 – ensimmäinen liike</span><span><kbd>W</kbd></span></div>
+      <div><span>T2 – jalka irtoaa pesältä</span><span><kbd>E</kbd></span></div>
+      <div><span>Tallenna toisto → seuraava</span><span><kbd>Enter</kbd></span></div>
+      <div><span>Kumoa viimeisin merkintä</span><span><kbd>Ctrl</kbd>+<kbd>Z</kbd></span></div>
+      <div><span>Hylätty / epävarma</span><span><kbd>H</kbd></span></div>
+      <div><span>Ehdota T0 äänestä (2. painallus hyväksyy)</span><span><kbd>A</kbd></span></div>
+      <div><span>Siirry merkkiin T0 / T1 / T2</span><span><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></span></div>
+      <div><span>Videon alkuun / loppuun</span><span><kbd>Home</kbd> <kbd>End</kbd></span></div>
+      <div><span>Zoom sisään / ulos / palauta</span><span><kbd>+</kbd> <kbd>-</kbd> <kbd>0</kbd></span></div>
+      <div><span>Ääni päälle / pois</span><span><kbd>M</kbd></span></div>
+      <div><span>Peru muokkaus / sulje</span><span><kbd>Esc</kbd></span></div>
+      <div><span>Tämä ohje</span><span><kbd>?</kbd></span></div>
+      <div><span>Kommenttikentässä Enter</span><span>tallentaa</span></div>
+    </div>
+    <h2 style="margin-top:14px">Hiiri</h2>
+    <ul style="margin:0;padding-left:18px;color:var(--text2)">
+      <li>Videon päällä: <b>rulla</b> = zoomaa kursorin kohtaan, <b>raahaus</b> = siirrä kuvaa, <b>tuplaklikkaus</b> = palauta.</li>
+      <li>Aikajanalla: <b>klikkaus/raahaus</b> = selaa, <b>raahaa merkkiä</b> = siirrä sitä, <b>oikea klikkaus merkkiin</b> = poista, <b>rulla</b> = zoomaa aikajanaa, <b>Shift+rulla</b> = vieritä, <b>tuplaklikkaus</b> = koko video.</li>
+    </ul>
+    <h2 style="margin-top:14px">Laskenta</h2>
+    <p class="t2c" style="margin:0">Reaktioaika = T1 − T0 · Lähtöaika = T2 − T0 · Lähtötekniikka = T2 − T1. Kaikki ajat muunnetaan todelliseksi ajaksi slow-mo-kertoimella (kuvattu fps / videon fps). Negatiiviset arvot (ennakointi, mahdollinen varaslähtö) sallitaan ja korostetaan.</p>
+    <div style="text-align:right;margin-top:12px"><button id="bHelpClose" class="primary">Sulje</button></div>
+  </div>
+</div>
+<div id="tip" hidden></div>
+<div id="toasts"></div>
+
+<script>
+'use strict';
+/* =====================================================================
+   Apuvälineet
+   ===================================================================== */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const hasRVFC = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
+const FPS_SNAP = [23.976, 24, 25, 29.97, 30, 48, 50, 59.94, 60, 90, 100, 119.88, 120, 180, 200, 239.76, 240, 480, 960];
+const SERIES = ['--s1', '--s2', '--s3', '--s4', '--s5', '--s6', '--s7', '--s8'].map(v => getComputedStyle(document.documentElement).getPropertyValue(v).trim());
+const MARK_KEYS = ['t0', 't1', 't2'];
+const MARK_LABEL = { t0: 'T0', t1: 'T1', t2: 'T2' };
+const MARK_DESC = { t0: 'ärsyke', t1: 'ensimmäinen liike', t2: 'jalka irtoaa' };
+const MARK_COLOR = { t0: '#eda100', t1: '#1baf7a', t2: '#eb6834' };
+
+function uuid() {
+  try { if (crypto.randomUUID) return crypto.randomUUID(); } catch (e) { /* file:// tms. */ }
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 15) | 64; b[8] = (b[8] & 63) | 128;
+  const h = [...b].map(x => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+function todayISO() { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); }
+function fiNum(x, dec = 0) { return x == null || !isFinite(x) ? '–' : x.toLocaleString('fi-FI', { minimumFractionDigits: dec, maximumFractionDigits: dec }); }
+function fmtMs(x, dec = 0) { return x == null || !isFinite(x) ? '–' : fiNum(x, dec) + ' ms'; }
+function fmtSec(t, dec = 3) { return fiNum(t, dec) + ' s'; }
+function fmtDateFi(iso) { if (!iso) return ''; const [y, m, d] = iso.split('-'); return `${+d}.${+m}.${y}`; }
+function toast(msg, kind = '', ms = 3500) {
+  const el = document.createElement('div'); el.className = 'toast ' + kind; el.textContent = msg;
+  $('#toasts').appendChild(el); setTimeout(() => el.remove(), ms);
+}
+function download(name, content, type) {
+  const blob = content instanceof Blob ? content : new Blob([content], { type });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+function waitEvent(el, name, timeout) {
+  return new Promise((res, rej) => {
+    const on = () => { clearTimeout(t); el.removeEventListener(name, on); res(); };
+    const t = setTimeout(() => { el.removeEventListener(name, on); rej(new Error('aikakatkaisu: ' + name)); }, timeout);
+    el.addEventListener(name, on);
+  });
+}
+
+/* =====================================================================
+   Tietokanta (IndexedDB)
+   ===================================================================== */
+// ?db=testi → automaattitestit käyttävät omaa tietokantaansa, eivätkä sotke oikeita merkintöjä
+const TEST_DB = new URLSearchParams(location.search).get('db') === 'testi';
+const DB_NAME = TEST_DB ? 'reaktioaikalaskuri-testi' : 'reaktioaikalaskuri';
+const DB = {
+  db: null,
+  async open() {
+    try {
+      this.db = await new Promise((res, rej) => {
+        const r = indexedDB.open(DB_NAME, 1);
+        r.onupgradeneeded = () => {
+          const d = r.result;
+          for (const [n, k] of [['players', 'id'], ['types', 'id'], ['reps', 'id'], ['videos', 'key'], ['settings', 'k']])
+            if (!d.objectStoreNames.contains(n)) d.createObjectStore(n, { keyPath: k });
+        };
+        r.onsuccess = () => res(r.result);
+        r.onerror = () => rej(r.error);
+      });
+    } catch (e) {
+      this.db = null;
+      toast('IndexedDB ei ole käytettävissä – tiedot EIVÄT tallennu pysyvästi. Vie JSON ennen sulkemista!', 'err', 10000);
+    }
+  },
+  req(store, mode, fn) {
+    return new Promise((res, rej) => {
+      if (!this.db) { res(null); return; }
+      const tx = this.db.transaction(store, mode);
+      const r = fn(tx.objectStore(store));
+      tx.oncomplete = () => res(r && 'result' in r ? r.result : null);
+      tx.onerror = () => rej(tx.error);
+    });
+  },
+  all(s) { return this.req(s, 'readonly', st => st.getAll()).then(x => x || []); },
+  put(s, o) { return this.req(s, 'readwrite', st => st.put(o)); },
+  putMany(s, arr) { return this.req(s, 'readwrite', st => { arr.forEach(o => st.put(o)); }); },
+  del(s, k) { return this.req(s, 'readwrite', st => st.delete(k)); },
+  clear(s) { return this.req(s, 'readwrite', st => st.clear()); },
+};
+
+const DEFAULT_TYPES = [
+  { id: 'syotto', nimi: 'Syöttö', t0: 'Syöttö irtoaa lukkarin kädestä (ensimmäinen kuva, jossa pallo ei enää koske sormiin)', jarj: 1 },
+  { id: 'osuma', nimi: 'Lyönnin osuma', t0: 'Maila osuu palloon (ensimmäinen kuva, jossa kontakti näkyy)', jarj: 2 },
+  { id: 'signaali', nimi: 'Mailamiehen signaali (3-pesä)', t0: 'Kaarella oleva mailamies vetää mailan alas (ensimmäinen kuva, jossa liike alkaa)', jarj: 3 },
+];
+const data = { players: [], types: [], reps: [], videos: new Map(), settings: {} };
+
+async function loadAll() {
+  await DB.open();
+  data.players = await DB.all('players');
+  data.types = await DB.all('types');
+  data.reps = await DB.all('reps');
+  (await DB.all('videos')).forEach(v => data.videos.set(v.key, v));
+  (await DB.all('settings')).forEach(s => data.settings[s.k] = s.v);
+  if (!data.types.length) { data.types = DEFAULT_TYPES.map(t => ({ ...t })); await DB.putMany('types', data.types); }
+  if (data.settings.aaniEtaisyys == null) data.settings.aaniEtaisyys = 0;
+}
+function setSetting(k, v) { data.settings[k] = v; DB.put('settings', { k, v }); }
+function playersSorted() { return [...data.players].sort((a, b) => a.nimi.localeCompare(b.nimi, 'fi')); }
+function typesSorted() { return [...data.types].sort((a, b) => (a.jarj ?? 99) - (b.jarj ?? 99) || a.nimi.localeCompare(b.nimi, 'fi')); }
+function playerById(id) { return data.players.find(p => p.id === id); }
+function typeById(id) { return data.types.find(t => t.id === id); }
+function playerName(r) { return playerById(r.pelaajaId)?.nimi ?? r.pelaaja ?? '?'; }
+function typeName(r) { return typeById(r.tilanneId)?.nimi ?? r.tilanne ?? '?'; }
+
+/* =====================================================================
+   Videon tila
+   ===================================================================== */
+const v = $('#v');
+const S = {
+  file: null, url: null, videoName: '', videoKey: '', duration: 0, ready: false, loading: false,
+  fpsFile: 30, fpsDetected: null, fpsCaptured: null,   // fpsCaptured null = sama kuin video
+  firstFrameTime: 0, curMediaTime: 0, curFrame: 0,
+  marks: { t0: null, t1: null, t2: null }, undo: [],
+  editingId: null, suggestion: null,
+  audio: null, // {peaks: Float32Array, rate: blocks/s, dur}
+};
+const TL = { start: 0, end: 1 };
+const Z = { s: 1, x: 0, y: 0 };
+
+function capFps() { return S.fpsCaptured || S.fpsFile; }
+function factor() { return S.fpsFile / capFps(); }           // mediasekunti → todellinen sekunti
+function frameTime(f) { return S.firstFrameTime + f / S.fpsFile; }
+function timeToFrame(t) { return Math.round((t - S.firstFrameTime) * S.fpsFile); }
+function timeToFrameFloor(t) { return Math.floor((t - S.firstFrameTime) * S.fpsFile + 1e-3); }
+function maxFrame() { return Math.max(0, Math.ceil((S.duration - S.firstFrameTime) * S.fpsFile - 0.5) - 1); }
+function realMs(t) { return t * 1000 * factor(); }
+function accMark() { return 1000 / capFps(); }
+function accInterval() { return 2000 / capFps(); }
+
+/* ---------- rVFC: todellinen kuva-aika ---------- */
+let frameWaiters = [];
+function onFrame(now, md) {
+  // Pysäytettynä hyväksytään vain kuva, joka vastaa videon nykyistä kohtaa. Hidas purku voi tuoda
+  // myöhässä ilmoituksen aiemmasta siirrosta, eikä se saa ylikirjoittaa nykyistä kuvaa.
+  const stale = v.paused && !S.probing && S.fpsFile > 0 && (md.mediaTime > v.currentTime + 1e-4 || v.currentTime - md.mediaTime > 1.5 / S.fpsFile);
+  if (stale) { v.requestVideoFrameCallback(onFrame); return; }
+  S.curMediaTime = md.mediaTime; S.curFrame = timeToFrame(md.mediaTime); S.frameSeq = (S.frameSeq || 0) + 1;
+  const w = frameWaiters; frameWaiters = [];
+  w.forEach(fn => fn(md.mediaTime));
+  scheduleRender();
+  v.requestVideoFrameCallback(onFrame);
+}
+if (hasRVFC) v.requestVideoFrameCallback(onFrame);
+v.addEventListener('timeupdate', () => {
+  if (!hasRVFC) { S.curMediaTime = v.currentTime; S.curFrame = timeToFrame(v.currentTime); scheduleRender(); }
+});
+
+/* ---------- kuvatarkka siirtyminen ---------- */
+const NAV = { busy: false, want: null, target: 0, p: Promise.resolve() };
+function gotoFrame(f) {
+  if (!S.ready) return Promise.resolve();
+  f = clamp(Math.round(f), 0, maxFrame());
+  NAV.target = f; NAV.want = f;
+  if (!v.paused) v.pause();
+  if (!NAV.busy) NAV.p = seekLoop();
+  return NAV.p;
+}
+async function seekLoop() {
+  NAV.busy = true;
+  try {
+    while (NAV.want !== null) { const f = NAV.want; NAV.want = null; await seekToFrame(f); }
+  } finally { NAV.busy = false; scheduleRender(); }
+}
+function seekToFrame(f) {
+  const dt = 1 / S.fpsFile;
+  const target = Math.min(frameTime(f) + dt * 0.5, S.duration - Math.min(dt * 0.25, 0.001));
+  const expect = frameTime(f);
+  return new Promise(res => {
+    let fin = false, seeked = false;
+    const seq0 = S.frameSeq || 0;
+    const done = () => {
+      if (fin) return; fin = true; v.removeEventListener('seeked', onSeeked);
+      // Selain vahvisti siirron jälkeen näkyvän kuvan (vanhentuneet ilmoitukset on jo suodatettu) → käytä sitä.
+      // Muuten (sama kuva, hidas piirto tai ei rVFC-tukea) näkyvissä on kuva, johon siirryttiin.
+      if (!hasRVFC || (S.frameSeq || 0) === seq0) { S.curMediaTime = expect; S.curFrame = f; }
+      scheduleRender(); res();
+    };
+    const waiter = mt => { if (Math.abs(mt - expect) < dt * 0.51 || seeked) done(); else frameWaiters.push(waiter); };
+    const onSeeked = () => { seeked = true; setTimeout(done, hasRVFC ? 180 : 0); };
+    if (hasRVFC) frameWaiters.push(waiter);
+    v.addEventListener('seeked', onSeeked);
+    setTimeout(done, 2500);
+    v.currentTime = target;
+  });
+}
+function stepFrames(n) {
+  if (!S.ready) return;
+  const base = NAV.busy ? NAV.target : S.curFrame;
+  gotoFrame(base + n);
+}
+function togglePlay() {
+  if (!S.ready) return;
+  if (v.paused) { v.playbackRate = +$('#rate').value; v.play().catch(() => { }); }
+  else v.pause();
+}
+v.addEventListener('play', () => { $('#bPlay').textContent = '⏸'; });
+v.addEventListener('pause', () => { $('#bPlay').textContent = '▶'; NAV.target = S.curFrame; scheduleRender(); });
+
+/* ---------- videon lataus ---------- */
+async function loadFile(file) {
+  if (!file) return;
+  if (!/^video\//.test(file.type) && !/\.(mp4|mov|m4v|webm|mkv|avi|3gp)$/i.test(file.name)) { toast('Tiedosto ei näytä videolta: ' + file.name, 'err'); return; }
+  cancelEdit(true);
+  S.ready = false; S.loading = true; S.audio = null; S.suggestion = null;
+  S.marks = { t0: null, t1: null, t2: null }; S.undo = [];
+  S.file = file; S.videoName = file.name; S.videoKey = file.name + '|' + file.size;
+  $('#fileName').textContent = file.name;
+  $('#dropHint').hidden = true; $('#errBox').hidden = true; $('#hud').hidden = true;
+  if (S.url) URL.revokeObjectURL(S.url);
+  S.url = URL.createObjectURL(file);
+  resetZoom();
+  const errP = new Promise((_, rej) => v.addEventListener('error', () => rej(new Error(mediaErr())), { once: true }));
+  v.src = S.url;
+  try {
+    await Promise.race([waitEvent(v, 'loadeddata', 20000), errP]);
+  } catch (e) { S.loading = false; showCodecError(file, e.message); return; }
+  if (!v.videoWidth) { S.loading = false; showCodecError(file, 'Selain purki tiedoston, mutta videokuvaa ei löytynyt (todennäköisesti vain ääni purkautui).'); return; }
+  if (!isFinite(v.duration)) {  // esim. MediaRecorder-webm ilman kestoa
+    v.currentTime = 1e9; await waitEvent(v, 'seeked', 8000).catch(() => { });
+  }
+  S.duration = v.duration;
+  TL.start = 0; TL.end = S.duration;
+  const saved = data.videos.get(S.videoKey);
+  // aloituskuvan aika
+  S.probing = true; S.firstFrameTime = 0;
+  const first = await firstFrameTimeProbe();
+  if (first != null && first < 0.5) S.firstFrameTime = first;
+  let det = null;
+  if (hasRVFC) { $('#fpsInfo').textContent = 'Tunnistetaan kuvataajuutta…'; det = await detectFps(); }
+  S.fpsDetected = det;
+  S.fpsFile = saved?.fpsFile || det || 30;
+  S.fpsCaptured = saved?.fpsCaptured || null;
+  S.ready = true; S.loading = false;
+  v.playbackRate = +$('#rate').value;
+  await gotoFrame(0);
+  saveVideoMeta();
+  renderFpsControls(); renderAll();
+  $('#hud').hidden = false;
+  if (!det && !saved) toast('Kuvataajuutta ei voitu tunnistaa automaattisesti – tarkista "Videon fps".', 'warn', 6000);
+  if (saved) toast('Videon aiemmat fps-asetukset palautettu.', 'ok');
+  loadAudio(file);
+}
+function mediaErr() {
+  const e = v.error; if (!e) return 'Tuntematon virhe';
+  return ({ 1: 'Lataus keskeytyi', 2: 'Verkko-/tiedostovirhe', 3: 'Purkuvirhe (koodekki)', 4: 'Selain ei tue tätä videomuotoa / koodekkia' }[e.code] || 'Virhe') + (e.message ? ' – ' + e.message : '');
+}
+function showCodecError(file, msg) {
+  S.ready = false;
+  const base = file.name.replace(/\.[^.]+$/, '');
+  $('#errBox').innerHTML = `
+    <h2>Videota ei voitu avata</h2>
+    <p><b>${esc(file.name)}</b>: ${esc(msg)}</p>
+    <p>Todennäköisin syy on <b>HEVC / H.265</b> -pakkaus (iPhonen "Tehokas"-muoto ja monet Android-puhelimet), jota Chrome/Edge eivät aina osaa toistaa Windowsissa.</p>
+    <h3>Ratkaisu 1 – kuvaa jatkossa yhteensopivassa muodossa</h3>
+    <ul>
+      <li><b>iPhone:</b> Asetukset → Kamera → Formaatit → <b>Yhteensopivin</b> (H.264). Slow-mo toimii myös tällä asetuksella.</li>
+      <li><b>Android:</b> Kamera → asetukset → videon lisäasetukset → poista <b>HEVC / H.265</b> käytöstä (tai valitse H.264).</li>
+      <li><b>Windows + Edge:</b> Microsoft Storesta saatava <i>HEVC-videolaajennus</i> voi mahdollistaa toiston Edgessä.</li>
+    </ul>
+    <h3>Ratkaisu 2 – muunna video ffmpegillä (säilyttää jokaisen kuvan)</h3>
+    <pre>ffmpeg -i "${esc(file.name)}" -c:v libx264 -preset slow -crf 17 -pix_fmt yuv420p -fps_mode passthrough -c:a aac -b:a 160k "${esc(base)}_h264.mp4"</pre>
+    <p class="muted">Vanhemmissa ffmpeg-versioissa käytä <code>-vsync passthrough</code> valitsimen <code>-fps_mode passthrough</code> sijaan. Muunnos ei muuta kuvataajuutta, joten slow-mo-asetus pysyy samana.</p>
+    <p><button onclick="document.getElementById('fileInput').click()" class="primary">Avaa toinen video…</button></p>`;
+  $('#errBox').hidden = false;
+  $('#fpsInfo').textContent = '–';
+  renderAll();
+}
+function firstFrameTimeProbe() {
+  if (!hasRVFC) return Promise.resolve(0);
+  return new Promise(res => {
+    let fin = false;
+    const done = x => { if (!fin) { fin = true; res(x); } };
+    frameWaiters.push(mt => done(mt));
+    v.currentTime = 0;
+    setTimeout(() => done(v.readyState >= 2 ? S.curMediaTime : null), 600);
+  });
+}
+/* Kuvataajuuden tunnistus: siirrytään pienin askelin (2,9 ms) videon alussa ja kerätään
+   rVFC:n ilmoittamat todelliset kuva-ajat. Peräkkäisten kuvien aikaeroista saadaan fps.
+   (Hidas toisto ei kelpaa: selain esittää kuvia silloin ryöpsähdyksinä ja ohittaa kuvia.) */
+async function detectFps() {
+  S.probing = true;
+  try { return await detectFpsInner(); } finally { S.probing = false; }
+}
+async function detectFpsInner() {
+  const start = Math.min(0.1, S.duration * 0.2), ts = new Set();
+  let wait = 70, misses = 0, anyFresh = false;   // jos selain ei ilmoita yhtään kuvaa (hidas laite / piirto hidastettu), odotetaan pidempään
+  for (const [step, n] of [[0.0029, 30], [0.011, 24]]) {
+    const base = start + (ts.size ? 30 * 0.0029 : 0);
+    for (let i = 0; i < n; i++) {
+      const x = base + i * step; if (x >= S.duration) break;
+      const r = await probeAt(x, wait);
+      if (r.fresh) anyFresh = true; else if (!anyFresh && ++misses >= 3 && wait < 400) wait = 400;
+      if (r.t != null) ts.add(Math.round(r.t * 1e6));
+    }
+    if (ts.size >= 8) break;
+  }
+  S.probeLog = { times: [...ts].sort((a, b) => a - b), wait, anyFresh };
+  return fpsFromTimes([...ts].sort((a, b) => a - b).map(x => x / 1e6));
+}
+function probeAt(x, wait = 70) {
+  return new Promise(res => {
+    let got = null, fin = false;
+    const w = mt => { got = mt; };
+    const finish = () => {
+      if (fin) return; fin = true;
+      frameWaiters = frameWaiters.filter(f => f !== w); v.removeEventListener('seeked', onS);
+      res({ t: got ?? S.curMediaTime, fresh: got != null });   // ei uutta kuvaa → sama kuva kuin ennen
+    };
+    // uusi kuva esitetään tavallisesti seuraavalla näytön päivityksellä; jos sitä ei tule 70 ms:ssa, kuva ei vaihtunut
+    const onS = () => { const t0 = performance.now(); const tick = () => { if (got != null || performance.now() - t0 > wait) finish(); else setTimeout(tick, 4); }; tick(); };
+    frameWaiters.push(w);
+    v.addEventListener('seeked', onS);
+    setTimeout(finish, 1500 + wait);
+    v.currentTime = x;
+  });
+}
+function fpsFromTimes(times) {
+  const d = [];
+  for (let i = 1; i < times.length; i++) { const x = times[i] - times[i - 1]; if (x > 1e-5) d.push(x); }
+  if (d.length < 2) return null;
+  const sorted = [...d].sort((a, b) => a - b);
+  const med = sorted[Math.floor(sorted.length / 2)];
+  const base = Math.min(med, sorted[0] * 1.6);    // ohitetut kuvat tuottavat 2×, 3× välejä
+  let frames = 0, sum = 0;
+  for (const x of d) { const k = Math.round(x / base); if (k >= 1 && k <= 4) { frames += k; sum += x; } }
+  if (!frames) return null;
+  const fps = frames / sum;
+  // Millisekunteihin pyöristetyillä aikaleimoilla (esim. WebM) 239,76 ja 240 eivät erotu → suosi kokonaislukua.
+  const msRounded = times.every(t => Math.abs(t * 1000 - Math.round(t * 1000)) < 1e-3);
+  if (msRounded) {
+    const r = FPS_SNAP.filter(Number.isInteger).reduce((a, b) => Math.abs(b - fps) < Math.abs(a - fps) ? b : a);
+    if (Math.abs(fps - r) / r < 0.02) return r;
+  }
+  const near = FPS_SNAP.reduce((a, b) => Math.abs(b - fps) < Math.abs(a - fps) ? b : a);
+  return Math.abs(fps - near) / near < 0.02 ? near : Math.round(fps * 100) / 100;
+}
+function saveVideoMeta() {
+  if (!S.videoKey) return;
+  const o = { key: S.videoKey, nimi: S.videoName, koko: S.file?.size, kesto_s: S.duration, fpsFile: S.fpsFile, fpsDetected: S.fpsDetected, fpsCaptured: S.fpsCaptured, paivitetty: new Date().toISOString() };
+  data.videos.set(o.key, o); DB.put('videos', o);
+}
+
+/* ---------- ääni ---------- */
+async function loadAudio(file) {
+  S.audio = null; S.suggestion = null;
+  const st = $('#audioStatus');
+  if (file.size > 700e6) { st.textContent = 'Tiedosto on liian suuri äänen purkuun.'; return; }
+  st.textContent = 'Puretaan ääntä…';
+  try {
+    const buf = await file.arrayBuffer();
+    if (S.file !== file) return;
+    const Ctx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    const ctx = new Ctx(1, 1, 48000);
+    const ab = await ctx.decodeAudioData(buf);
+    if (S.file !== file) return;
+    const BLK = Math.max(1, Math.round(ab.sampleRate / 4000));   // n. 0,25 ms lohkot
+    const n = Math.ceil(ab.length / BLK), peaks = new Float32Array(n);
+    const chans = []; for (let c = 0; c < ab.numberOfChannels; c++) chans.push(ab.getChannelData(c));
+    let gmax = 0;
+    for (let i = 0; i < n; i++) {
+      let m = 0; const a = i * BLK, b = Math.min(ab.length, a + BLK);
+      for (const ch of chans) for (let j = a; j < b; j++) { const x = Math.abs(ch[j]); if (x > m) m = x; }
+      peaks[i] = m; if (m > gmax) gmax = m;
+    }
+    if (gmax > 0) for (let i = 0; i < n; i++) peaks[i] /= gmax;
+    S.audio = { peaks, rate: ab.sampleRate / BLK, dur: ab.duration, silent: gmax < 1e-4 };
+    st.textContent = S.audio.silent ? 'Ääniraita on hiljainen.' : 'Ääni ladattu (' + fiNum(ab.duration, 1) + ' s).';
+  } catch (e) {
+    if (S.file === file) st.textContent = 'Ei ääniraitaa tai sitä ei voitu purkaa.';
+  }
+  scheduleRender();
+}
+function suggestT0() {
+  if (!S.ready) return;
+  if (S.suggestion) { acceptSuggestion(); return; }
+  if (!S.audio || S.audio.silent) { toast('Ääniraitaa ei ole käytettävissä.', 'warn'); return; }
+  const A = S.audio, cur = S.curMediaTime;
+  let w0, w1;
+  const span = TL.end - TL.start;
+  if (span < 1.2 && cur >= TL.start && cur <= TL.end) { w0 = TL.start; w1 = TL.end; }
+  else { w0 = cur - 0.5; w1 = cur + 0.5; }
+  const i0 = clamp(Math.floor(w0 * A.rate), 0, A.peaks.length - 1), i1 = clamp(Math.ceil(w1 * A.rate), 0, A.peaks.length - 1);
+  let pk = i0;
+  for (let i = i0; i <= i1; i++) if (A.peaks[i] > A.peaks[pk]) pk = i;
+  if (A.peaks[pk] < 0.02) { toast('Nykyisen kohdan läheltä (±0,5 s) ei löytynyt selvää äänipiikkiä.', 'warn'); return; }
+  // alkukohta: aikaisin lohko 30 ms sisällä ennen huippua, joka ylittää 30 % huipusta
+  const thr = A.peaks[pk] * 0.3, back = Math.round(0.03 * A.rate);
+  let on = pk;
+  for (let i = Math.max(0, pk - back); i <= pk; i++) if (A.peaks[i] >= thr) { on = i; break; }
+  const tSound = on / A.rate;
+  const delayMedia = (+data.settings.aaniEtaisyys || 0) / 343 / factor();
+  const t = Math.max(0, tSound - delayMedia);
+  S.suggestion = { t, tSound, f: timeToFrameFloor(t), delayMs: delayMedia * 1000 * factor() };
+  gotoFrame(S.suggestion.f);
+  renderSuggestion(); scheduleRender();
+}
+function acceptSuggestion() {
+  if (!S.suggestion) return;
+  pushUndo();
+  S.marks.t0 = { t: S.suggestion.t, f: S.suggestion.f, src: 'ääni' };
+  S.suggestion = null; renderSuggestion(); renderMarks(); scheduleRender();
+}
+function rejectSuggestion() { S.suggestion = null; renderSuggestion(); scheduleRender(); }
+function renderSuggestion() {
+  const b = $('#sugBox');
+  if (!S.suggestion) { b.hidden = true; return; }
+  const s = S.suggestion;
+  b.hidden = false;
+  b.innerHTML = `<b>Ääniehdotus T0:</b> kuva ${s.f} · ${fmtSec(s.t, 4)}${s.delayMs ? ` <span class="muted">(viivekorjaus −${fiNum(s.delayMs, 1)} ms)</span>` : ''}<br>
+    <span class="muted">Tarkista kuvasta. Ääni ja kuva voivat puhelimessa olla hieman eri tahdissa.</span>
+    <div class="row"><button class="small primary" id="bSugOk">Hyväksy <kbd>A</kbd></button><button class="small" id="bSugNo">Hylkää</button></div>`;
+  $('#bSugOk').onclick = acceptSuggestion; $('#bSugNo').onclick = rejectSuggestion;
+}
+
+/* =====================================================================
+   Merkinnät
+   ===================================================================== */
+function pushUndo() { S.undo.push(JSON.stringify(S.marks)); if (S.undo.length > 200) S.undo.shift(); }
+function undo() {
+  if (!S.undo.length) { toast('Ei kumottavaa.'); return; }
+  S.marks = JSON.parse(S.undo.pop()); renderMarks(); scheduleRender();
+}
+function setMark(k) {
+  if (!S.ready) { toast('Avaa ensin video.', 'warn'); return; }
+  pushUndo();
+  S.marks[k] = { t: S.curMediaTime, f: S.curFrame, src: 'kuva' };
+  if (k === 't0') S.suggestion = null, renderSuggestion();
+  renderMarks(); scheduleRender();
+}
+function delMark(k) { if (!S.marks[k]) return; pushUndo(); S.marks[k] = null; renderMarks(); scheduleRender(); }
+function clearMarks() {
+  if (MARK_KEYS.some(k => S.marks[k])) pushUndo();
+  S.marks = { t0: null, t1: null, t2: null }; S.suggestion = null; renderSuggestion(); renderMarks(); scheduleRender();
+}
+function calc(m, fac) {
+  const d = (a, b) => (a && b) ? (b.t - a.t) * 1000 * fac : null;
+  return { reaktio: d(m.t0, m.t1), lahto: d(m.t0, m.t2), tekniikka: d(m.t1, m.t2) };
+}
+function renderMarks() {
+  const box = $('#marks');
+  box.innerHTML = MARK_KEYS.map(k => {
+    const m = S.marks[k];
+    const val = m ? `kuva <b>${m.f}</b> · ${fiNum(realMs(m.t), 1)} ms${m.src === 'ääni' ? ' <span class="muted">(ääni)</span>' : ''}` : `<span class="muted">${MARK_DESC[k]}${k === 't1' ? ' (valinnainen)' : ''}</span>`;
+    return `<div class="mrow"><span class="tag ${k}">${MARK_LABEL[k]}</span><span class="mval mono ${m ? '' : 'empty'}">${val}</span>
+      <span><button class="small" data-set="${k}" title="Aseta nykyiseen kuvaan (${k === 't0' ? 'Q' : k === 't1' ? 'W' : 'E'})">${k === 't0' ? 'Q' : k === 't1' ? 'W' : 'E'}</button>
+      <button class="small ghost" data-go="${k}" title="Siirry merkkiin" ${m ? '' : 'disabled'}>↦</button>
+      <button class="small ghost" data-del="${k}" title="Poista merkintä" ${m ? '' : 'disabled'}>✕</button></span></div>`;
+  }).join('');
+  box.querySelectorAll('[data-set]').forEach(b => b.onclick = () => setMark(b.dataset.set));
+  box.querySelectorAll('[data-go]').forEach(b => b.onclick = () => gotoMark(b.dataset.go));
+  box.querySelectorAll('[data-del]').forEach(b => b.onclick = () => delMark(b.dataset.del));
+  renderResult();
+}
+function gotoMark(k) { const m = S.marks[k]; if (m) gotoFrame(m.f); }
+function renderResult() {
+  const r = calc(S.marks, factor());
+  const acc = accInterval();
+  const line = (lbl, formula, x) => `<span>${lbl} <span class="muted">${formula}</span></span><span class="v mono ${x != null && x < 0 ? 'neg' : ''}">${x == null ? '–' : (x < 0 ? '−' : '') + fiNum(Math.abs(x), 0) + ' ms'}</span>`;
+  $('#resBox').innerHTML = line('Reaktioaika', 'T1−T0', r.reaktio) + line('Lähtöaika', 'T2−T0', r.lahto) + line('Tekniikka', 'T2−T1', r.tekniikka)
+    + `<span class="muted">Tarkkuus</span><span class="muted mono" style="text-align:right">±${fiNum(acc, 1)} ms</span>`;
+  const notes = [];
+  const t = typeById($('#selType').value);
+  if ((r.reaktio != null && r.reaktio < 0) || (r.lahto != null && r.lahto < 0)) {
+    notes.push(`<div class="negnote">⚠ Negatiivinen aika: liike alkoi ennen ärsykettä – <b>ennakointi${t?.id === 'syotto' ? ' / mahdollinen varaslähtö' : ''}</b>. Tallennetaan normaalisti ja korostetaan tuloksissa.</div>`);
+  }
+  if (S.marks.t1 && S.marks.t2 && S.marks.t2.t < S.marks.t1.t) notes.push(`<div class="warnnote">T2 on ennen T1:tä – tarkista merkinnät.</div>`);
+  $('#resNotes').innerHTML = notes.join('');
+}
+
+/* ---------- tallennus ---------- */
+async function saveRep() {
+  if (!S.ready) { toast('Avaa ensin video.', 'warn'); return; }
+  const pid = $('#selPlayer').value, tid = $('#selType').value;
+  if (!pid) { toast('Valitse pelaaja.', 'err'); $('#selPlayer').focus(); return; }
+  if (!tid) { toast('Valitse ärsyke.', 'err'); return; }
+  const m = S.marks;
+  if (!m.t0 || (!m.t1 && !m.t2)) { toast('Merkitse vähintään T0 sekä T1 tai T2.', 'err'); return; }
+  const fac = factor(), r = calc(m, fac);
+  const old = S.editingId ? data.reps.find(x => x.id === S.editingId) : null;
+  const now = new Date().toISOString();
+  const rep = {
+    id: old?.id ?? uuid(),
+    pvm: $('#inDate').value || todayISO(),
+    harjoitus: $('#inSession').value.trim(),
+    pelaajaId: pid, pelaaja: playerById(pid)?.nimi ?? '',
+    tilanneId: tid, tilanne: typeById(tid)?.nimi ?? '', pesa: $('#selBase').value,
+    video: S.videoName, videoKey: S.videoKey, kesto_s: S.duration,
+    fps_toisto: S.fpsFile, fps_kuvattu: capFps(), kerroin: fac,
+    t0: m.t0, t1: m.t1, t2: m.t2,
+    t0_ms: m.t0 ? realMs(m.t0.t) : null, t1_ms: m.t1 ? realMs(m.t1.t) : null, t2_ms: m.t2 ? realMs(m.t2.t) : null,
+    reaktioaika_ms: r.reaktio, lahtoaika_ms: r.lahto, tekniikka_ms: r.tekniikka,
+    tarkkuus_ms: accInterval(),
+    hylatty: $('#chkRej').checked,
+    merkitsija: old?.merkitsija || data.settings.merkitsija || '',
+    kommentti: $('#comment').value.trim(),
+    luotu: old?.luotu ?? now, muokattu: now,
+  };
+  await DB.put('reps', rep);
+  if (old) Object.assign(old, rep); else data.reps.push(rep);
+  setSetting('lastPlayer', pid); setSetting('lastType', tid); setSetting('lastBase', rep.pesa); setSetting('lastSession', rep.harjoitus); setSetting('lastDate', rep.pvm);
+  const negTxt = (r.reaktio < 0 || r.lahto < 0) ? ' (negatiivinen!)' : '';
+  toast(`${old ? 'Päivitetty' : 'Tallennettu'}: ${rep.pelaaja} · R ${fmtMs(r.reaktio)} · L ${fmtMs(r.lahto)}${negTxt}`, 'ok');
+  S.editingId = null; $('#editBanner').hidden = true;
+  S.marks = { t0: null, t1: null, t2: null }; S.undo = []; S.suggestion = null;
+  $('#comment').value = ''; $('#chkRej').checked = false;
+  renderSuggestion(); renderMarks(); renderVideoReps(); renderSessionList(); scheduleRender();
+}
+function editRep(id) {
+  const r = data.reps.find(x => x.id === id); if (!r) return;
+  if (r.video !== S.videoName || !S.ready) { toast(`Avaa ensin video "${r.video}", jotta toistoa voi muokata.`, 'warn', 5000); return; }
+  showView('mark');
+  S.editingId = id; $('#editBanner').hidden = false;
+  S.undo = []; S.marks = { t0: r.t0 ?? null, t1: r.t1 ?? null, t2: r.t2 ?? null };
+  $('#selPlayer').value = r.pelaajaId; $('#selType').value = r.tilanneId; $('#selBase').value = r.pesa || '';
+  $('#inDate').value = r.pvm; $('#inSession').value = r.harjoitus || '';
+  $('#comment').value = r.kommentti || ''; $('#chkRej').checked = !!r.hylatty;
+  renderMarks(); renderT0Hint();
+  if (r.t0) gotoFrame(r.t0.f);
+}
+function cancelEdit(silent) {
+  if (!S.editingId) return;
+  S.editingId = null; $('#editBanner').hidden = true;
+  S.marks = { t0: null, t1: null, t2: null }; S.undo = [];
+  $('#comment').value = ''; $('#chkRej').checked = false;
+  renderMarks(); scheduleRender();
+  if (!silent) toast('Muokkaus peruttu.');
+}
+async function deleteRep(id) {
+  const r = data.reps.find(x => x.id === id); if (!r) return;
+  if (!confirm(`Poistetaanko toisto?\n${fmtDateFi(r.pvm)} · ${playerName(r)} · ${typeName(r)}\nReaktioaika ${fmtMs(r.reaktioaika_ms)}, lähtöaika ${fmtMs(r.lahtoaika_ms)}`)) return;
+  await DB.del('reps', id);
+  data.reps = data.reps.filter(x => x.id !== id);
+  if (S.editingId === id) cancelEdit(true);
+  renderVideoReps(); renderDataViews(); scheduleRender();
+}
+function renderVideoReps() {
+  const list = data.reps.filter(r => r.video === S.videoName && S.videoName).sort((a, b) => (a.t0?.t ?? 0) - (b.t0?.t ?? 0));
+  $('#repCount').textContent = list.length ? `(${list.length})` : '';
+  $('#videoReps').innerHTML = list.map((r, i) => `<li class="${r.hylatty ? 'rej' : ''}" data-id="${r.id}">
+    <span class="txt" title="Siirry toiston T0-kohtaan">${i + 1}. ${esc(playerName(r))} · ${esc(typeName(r))} · R <span class="${r.reaktioaika_ms < 0 ? 'negv' : ''}">${r.reaktioaika_ms == null ? '–' : fiNum(r.reaktioaika_ms)}</span> · L <span class="${r.lahtoaika_ms < 0 ? 'negv' : ''}">${fiNum(r.lahtoaika_ms)}</span></span>
+    <button class="small ghost" data-edit title="Muokkaa">✎</button><button class="small ghost" data-del title="Poista">🗑</button></li>`).join('') || '<li class="muted">Ei vielä tallennettuja toistoja.</li>';
+  $$('#videoReps li[data-id]').forEach(li => {
+    const id = li.dataset.id, r = data.reps.find(x => x.id === id);
+    li.querySelector('.txt').onclick = () => { if (r?.t0) gotoFrame(r.t0.f); };
+    li.querySelector('[data-edit]').onclick = () => editRep(id);
+    li.querySelector('[data-del]').onclick = () => deleteRep(id);
+  });
+}
+
+/* =====================================================================
+   Session-kentät, fps-kentät
+   ===================================================================== */
+function renderPlayerSelect() {
+  const sel = $('#selPlayer'), cur = sel.value || data.settings.lastPlayer || '';
+  sel.innerHTML = '<option value="">– valitse –</option>' + playersSorted().map(p => `<option value="${p.id}">${esc(p.nimi)}</option>`).join('');
+  if (playerById(cur)) sel.value = cur;
+}
+function renderTypeSelect() {
+  const sel = $('#selType'), cur = sel.value || data.settings.lastType || 'syotto';
+  sel.innerHTML = typesSorted().filter(t => !t.piilotettu || t.id === cur).map(t => `<option value="${t.id}">${esc(t.nimi)}</option>`).join('');
+  if (typeById(cur)) sel.value = cur;
+  renderT0Hint();
+}
+function renderT0Hint() { const t = typeById($('#selType').value); $('#t0hint').innerHTML = t ? `<b style="color:var(--t0)">T0</b> = ${esc(t.t0 || t.nimi)}` : ''; }
+function renderSessionList() {
+  const s = [...new Set(data.reps.map(r => r.harjoitus).filter(Boolean))].sort();
+  $('#sessionList').innerHTML = s.map(x => `<option value="${esc(x)}">`).join('');
+}
+async function addPlayer(name) {
+  name = (name || '').trim(); if (!name) return null;
+  const ex = data.players.find(p => p.nimi.toLowerCase() === name.toLowerCase());
+  if (ex) { toast('Pelaaja on jo listalla.'); return ex; }
+  const p = { id: uuid(), nimi: name, luotu: new Date().toISOString() };
+  data.players.push(p); await DB.put('players', p);
+  return p;
+}
+function renderFpsControls() {
+  $('#inFps').value = S.ready || S.fpsFile ? S.fpsFile : '';
+  const cap = S.fpsCaptured, sel = $('#selCap');
+  if (!cap) { sel.value = ''; $('#capCustomRow').hidden = true; }
+  else if ([...sel.options].some(o => o.value === String(cap))) { sel.value = String(cap); $('#capCustomRow').hidden = true; }
+  else { sel.value = 'custom'; $('#capCustomRow').hidden = false; $('#inCapCustom').value = cap; }
+  renderFpsInfo();
+}
+function renderFpsInfo() {
+  if (!S.ready) { $('#fpsInfo').textContent = '–'; return; }
+  const cap = capFps(), slow = cap / S.fpsFile;
+  const det = S.fpsDetected ? `Tunnistettu ${fiNum(S.fpsDetected, S.fpsDetected % 1 ? 2 : 0)} fps. ` : 'Automaattinen tunnistus ei onnistunut. ';
+  const slowTxt = Math.abs(slow - 1) > 1e-6 ? `<b style="color:var(--warn)">Slow-mo ${fiNum(slow, slow % 1 ? 2 : 0)}× hidastettu</b> – ajat muunnetaan todellisiksi (× ${fiNum(1 / slow, 4)}). ` : '';
+  $('#fpsInfo').innerHTML = `${det}${slowTxt}<br>Tarkkuus ${fiNum(cap, cap % 1 ? 2 : 0)} fps: <b>±${fiNum(accMark(), 1)} ms</b> / merkintä, <b>±${fiNum(accInterval(), 1)} ms</b> / aikaväli.`;
+}
+function onFpsChange() {
+  const f = parseFloat(String($('#inFps').value).replace(',', '.'));
+  if (!(f > 0)) return;
+  const keep = S.curMediaTime;
+  S.fpsFile = f;
+  const sv = $('#selCap').value;
+  if (sv === 'custom') { const c = parseFloat(String($('#inCapCustom').value).replace(',', '.')); S.fpsCaptured = c > 0 ? c : null; $('#capCustomRow').hidden = false; }
+  else { S.fpsCaptured = sv ? +sv : null; $('#capCustomRow').hidden = true; }
+  if (S.fpsCaptured && Math.abs(S.fpsCaptured - S.fpsFile) < 1e-6) S.fpsCaptured = null;
+  S.curFrame = timeToFrame(keep);
+  // merkkien kuvanumerot päivittyvät uuden fps:n mukaan
+  MARK_KEYS.forEach(k => { if (S.marks[k]) S.marks[k].f = S.marks[k].src === 'ääni' ? timeToFrameFloor(S.marks[k].t) : timeToFrame(S.marks[k].t); });
+  saveVideoMeta(); renderFpsInfo(); renderMarks(); scheduleRender();
+}
+
+/* =====================================================================
+   Aikajana (canvas)
+   ===================================================================== */
+const cv = $('#timeline'), g = cv.getContext('2d');
+let renderQueued = false;
+function scheduleRender() { if (!renderQueued) { renderQueued = true; requestAnimationFrame(() => { renderQueued = false; drawTimeline(); updateInfo(); }); } }
+function tx(t) { return (t - TL.start) / (TL.end - TL.start) * cv.clientWidth; }
+function xt(x) { return TL.start + x / cv.clientWidth * (TL.end - TL.start); }
+function niceStep(pxPerSec) {
+  const steps = [0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600];
+  for (const s of steps) if (s * pxPerSec >= 80) return s;
+  return 1200;
+}
+function drawTimeline() {
+  const dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+  if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.fillStyle = '#1a1a19'; g.fillRect(0, 0, W, H);
+  if (!S.ready) { g.fillStyle = '#8d8c84'; g.font = '12px system-ui'; g.fillText('Aikajana – avaa video', 10, 20); return; }
+  // seuraa nykykohtaa
+  const span = TL.end - TL.start;
+  if ((S.curMediaTime < TL.start || S.curMediaTime > TL.end) && span < S.duration) {
+    TL.start = clamp(S.curMediaTime - span / 2, 0, Math.max(0, S.duration - span)); TL.end = TL.start + span;
+  }
+  const RULER = 18, BOT = 16, top = RULER, mid = H - BOT;
+  // ääniaalto
+  if (S.audio) {
+    const A = S.audio, cy = (top + mid) / 2, amp = (mid - top) / 2 - 2;
+    g.fillStyle = 'rgba(57,135,229,.55)';
+    for (let x = 0; x < W; x++) {
+      const i0 = Math.floor(xt(x) * A.rate), i1 = Math.max(i0 + 1, Math.floor(xt(x + 1) * A.rate));
+      if (i1 <= 0 || i0 >= A.peaks.length) continue;
+      let m = 0; for (let i = Math.max(0, i0); i < Math.min(A.peaks.length, i1); i++) if (A.peaks[i] > m) m = A.peaks[i];
+      const h = Math.max(0.5, m * amp); g.fillRect(x, cy - h, 1, h * 2);
+    }
+  }
+  // viivain
+  g.fillStyle = '#232321'; g.fillRect(0, 0, W, RULER);
+  const pps = W / span, st = niceStep(pps);
+  g.strokeStyle = '#383835'; g.fillStyle = '#c3c2b7'; g.font = '11px system-ui'; g.lineWidth = 1;
+  const dec = st >= 1 ? 0 : st >= 0.1 ? 1 : st >= 0.01 ? 2 : 3;
+  for (let t = Math.ceil(TL.start / st) * st; t <= TL.end; t += st) {
+    const x = Math.round(tx(t)) + 0.5;
+    g.beginPath(); g.moveTo(x, RULER - 6); g.lineTo(x, mid); g.stroke();
+    g.fillText(fiNum(t, dec) + ' s', x + 3, 12);
+  }
+  // kuvarajat kun zoomattu tarpeeksi
+  const fpx = pps / S.fpsFile;
+  if (fpx >= 6) {
+    g.strokeStyle = 'rgba(195,194,183,.35)';
+    const f0 = Math.max(0, timeToFrame(TL.start) - 1), f1 = timeToFrame(TL.end) + 1;
+    for (let f = f0; f <= f1; f++) { const x = Math.round(tx(frameTime(f))) + 0.5; g.beginPath(); g.moveTo(x, RULER - 4); g.lineTo(x, RULER); g.stroke(); }
+    if (fpx >= 26) { g.fillStyle = '#8d8c84'; g.font = '10px system-ui'; for (let f = f0; f <= f1; f++) g.fillText(f, tx(frameTime(f)) + 2, RULER + 10); }
+  }
+  // tallennetut toistot tästä videosta
+  const reps = data.reps.filter(r => r.video === S.videoName && r.id !== S.editingId);
+  g.font = '10px system-ui';
+  for (const r of reps) {
+    const a = r.t0?.t, b = (r.t2 || r.t1)?.t; if (a == null || b == null) continue;
+    const x0 = tx(Math.min(a, b)), x1 = tx(Math.max(a, b));
+    if (x1 < 0 || x0 > W) continue;
+    g.fillStyle = r.hylatty ? 'rgba(141,140,132,.35)' : 'rgba(141,140,132,.7)';
+    g.fillRect(x0, mid + 3, Math.max(2, x1 - x0), 9);
+    g.fillStyle = '#c3c2b7'; g.fillText(playerName(r), x0 + 2, mid + 11 - 1);
+  }
+  // ehdotus
+  if (S.suggestion) {
+    const x = Math.round(tx(S.suggestion.t)) + 0.5; g.strokeStyle = '#e87ba4'; g.setLineDash([4, 3]); g.lineWidth = 2;
+    g.beginPath(); g.moveTo(x, RULER); g.lineTo(x, mid); g.stroke(); g.setLineDash([]);
+  }
+  // merkit
+  for (const k of MARK_KEYS) {
+    const m = S.marks[k]; if (!m) continue;
+    const x = Math.round(tx(m.t)) + 0.5; if (x < -20 || x > W + 20) continue;
+    g.strokeStyle = MARK_COLOR[k]; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(x, RULER); g.lineTo(x, mid); g.stroke();
+    g.fillStyle = MARK_COLOR[k]; g.beginPath(); g.roundRect ? g.roundRect(x - 12, RULER + 2 + (k === 't1' ? 18 : k === 't2' ? 36 : 0), 24, 15, 3) : g.rect(x - 12, RULER + 2, 24, 15); g.fill();
+    g.fillStyle = '#000'; g.font = 'bold 11px system-ui'; g.fillText(MARK_LABEL[k], x - 8, RULER + 13 + (k === 't1' ? 18 : k === 't2' ? 36 : 0));
+  }
+  // nykyinen kohta
+  const cx = Math.round(tx(S.curMediaTime)) + 0.5;
+  if (fpx >= 3) { g.fillStyle = 'rgba(255,255,255,.12)'; g.fillRect(tx(frameTime(S.curFrame)), RULER, Math.max(1, fpx), mid - RULER); }
+  g.strokeStyle = '#ffffff'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(cx, 0); g.lineTo(cx, H); g.stroke();
+  // koko videon minikartta, kun zoomattu
+  if (span < S.duration * 0.999) {
+    g.fillStyle = 'rgba(57,135,229,.5)';
+    g.fillRect(TL.start / S.duration * W, H - 3, Math.max(3, span / S.duration * W), 3);
+  }
+}
+function markAtX(x) {
+  let best = null, bd = 7;
+  for (const k of MARK_KEYS) { const m = S.marks[k]; if (!m) continue; const d = Math.abs(tx(m.t) - x); if (d < bd) { bd = d; best = k; } }
+  return best;
+}
+let tlDrag = null;
+cv.addEventListener('pointerdown', e => {
+  if (!S.ready || e.button !== 0) return;
+  const x = e.offsetX, k = markAtX(x);
+  cv.setPointerCapture(e.pointerId);
+  if (k) { pushUndo(); tlDrag = { mode: 'mark', k }; }
+  else { tlDrag = { mode: 'scrub' }; gotoFrame(timeToFrameFloor(xt(x))); }
+});
+cv.addEventListener('pointermove', e => {
+  if (!tlDrag) { cv.style.cursor = S.ready && markAtX(e.offsetX) ? 'ew-resize' : 'crosshair'; return; }
+  const f = clamp(timeToFrameFloor(xt(e.offsetX)), 0, maxFrame());
+  if (tlDrag.mode === 'mark') { S.marks[tlDrag.k] = { t: frameTime(f), f, src: 'kuva' }; renderMarks(); }
+  gotoFrame(f);
+});
+cv.addEventListener('pointerup', async e => {
+  if (!tlDrag) return;
+  const d = tlDrag; tlDrag = null;
+  if (d.mode === 'mark') {
+    await gotoFrame(clamp(timeToFrameFloor(xt(e.offsetX)), 0, maxFrame()));
+    S.marks[d.k] = { t: S.curMediaTime, f: S.curFrame, src: 'kuva' };   // todellinen kuva-aika rVFC:stä
+    renderMarks(); scheduleRender();
+  }
+});
+cv.addEventListener('contextmenu', e => { e.preventDefault(); const k = markAtX(e.offsetX); if (k) delMark(k); });
+cv.addEventListener('dblclick', () => { TL.start = 0; TL.end = S.duration; scheduleRender(); });
+cv.addEventListener('wheel', e => {
+  if (!S.ready) return; e.preventDefault();
+  const span = TL.end - TL.start;
+  if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+    const d = (e.deltaX || e.deltaY) / cv.clientWidth * span;
+    TL.start = clamp(TL.start + d, 0, S.duration - span); TL.end = TL.start + span;
+  } else {
+    const t = xt(e.offsetX), k = e.deltaY < 0 ? 1 / 1.35 : 1.35;
+    const ns = clamp(span * k, Math.min(S.duration, 12 / S.fpsFile), S.duration);
+    TL.start = clamp(t - (t - TL.start) * ns / span, 0, S.duration - ns); TL.end = TL.start + ns;
+  }
+  scheduleRender();
+}, { passive: false });
+
+/* ---------- info-rivi ja HUD ---------- */
+function updateInfo() {
+  if (!S.ready) { $('#frameInfo').textContent = '–'; return; }
+  const f = S.curFrame;
+  $('#frameInfo').innerHTML = `Kuva <b>${f}</b> / ${maxFrame()} · ${fmtSec(S.curMediaTime, 3)} · todellinen <b>${fiNum(realMs(S.curMediaTime), 1)} ms</b> · ${fiNum(S.fpsFile, S.fpsFile % 1 ? 2 : 0)} fps`;
+  const on = MARK_KEYS.filter(k => S.marks[k] && S.marks[k].f === f);
+  $('#hud').innerHTML = `<span class="mono">Kuva ${f}</span>` + on.map(k => `<span class="mk" style="background:${MARK_COLOR[k]}">${MARK_LABEL[k]}</span>`).join('')
+    + (S.suggestion && S.suggestion.f === f ? `<span class="mk" style="background:var(--sug)">T0?</span>` : '')
+    + (capFps() !== S.fpsFile ? `<span style="color:var(--warn)">slow-mo ${fiNum(capFps() / S.fpsFile, 1)}×</span>` : '');
+}
+
+/* =====================================================================
+   Videon zoom / pan
+   ===================================================================== */
+const stage = $('#stage');
+function applyZoom() { v.style.transform = `translate(${Z.x}px,${Z.y}px) scale(${Z.s})`; $('#zoomLbl').textContent = fiNum(Z.s, 1) + '×'; }
+function clampPan() { const w = stage.clientWidth, h = stage.clientHeight; Z.x = clamp(Z.x, w - w * Z.s, 0); Z.y = clamp(Z.y, h - h * Z.s, 0); }
+function zoomAt(cx, cy, k) { const ns = clamp(Z.s * k, 1, 16), kk = ns / Z.s; Z.x = cx - (cx - Z.x) * kk; Z.y = cy - (cy - Z.y) * kk; Z.s = ns; clampPan(); applyZoom(); }
+function resetZoom() { Z.s = 1; Z.x = 0; Z.y = 0; applyZoom(); }
+stage.addEventListener('wheel', e => {
+  if (!S.ready) return; e.preventDefault();
+  const r = stage.getBoundingClientRect(); zoomAt(e.clientX - r.left, e.clientY - r.top, e.deltaY < 0 ? 1.2 : 1 / 1.2);
+}, { passive: false });
+let pan = null;
+stage.addEventListener('pointerdown', e => {
+  if (!S.ready || e.button !== 0 || e.target.closest('.errbox,.drop')) return;
+  pan = { x: e.clientX, y: e.clientY, zx: Z.x, zy: Z.y }; stage.setPointerCapture(e.pointerId); stage.classList.add('panning');
+});
+stage.addEventListener('pointermove', e => { if (!pan) return; Z.x = pan.zx + e.clientX - pan.x; Z.y = pan.zy + e.clientY - pan.y; clampPan(); applyZoom(); });
+stage.addEventListener('pointerup', () => { pan = null; stage.classList.remove('panning'); });
+stage.addEventListener('dblclick', e => { if (!e.target.closest('.errbox,.drop')) resetZoom(); });
+new ResizeObserver(() => { clampPan(); applyZoom(); scheduleRender(); }).observe(stage);
+
+/* =====================================================================
+   Suodattimet, tilastot, taulukot
+   ===================================================================== */
+const FLT = { players: new Set(), type: '', base: '', from: '', to: '', rej: false, metric: 'reaktioaika_ms' };
+const METRICS = { reaktioaika_ms: 'Reaktioaika (T1−T0)', lahtoaika_ms: 'Lähtöaika (T2−T0)', tekniikka_ms: 'Lähtötekniikka (T2−T1)' };
+function renderFilters() {
+  const pl = playersSorted();
+  const html = `
+    <div><label>Pelaajat</label> <div class="chips" style="display:inline-flex">
+      <button class="chip ${FLT.players.size ? '' : 'on'}" data-p="">Kaikki</button>
+      ${pl.map(p => `<button class="chip ${FLT.players.has(p.id) ? 'on' : ''}" data-p="${p.id}">${esc(p.nimi)}</button>`).join('')}</div></div>
+    <div><label>Ärsyke</label> <select data-f="type"><option value="">Kaikki</option>${typesSorted().map(t => `<option value="${t.id}" ${FLT.type === t.id ? 'selected' : ''}>${esc(t.nimi)}</option>`).join('')}</select></div>
+    <div><label>Pesä</label> <select data-f="base"><option value="">Kaikki</option>${['Kotipesä', '1-pesä', '2-pesä', '3-pesä'].map(x => `<option ${FLT.base === x ? 'selected' : ''}>${x}</option>`).join('')}</select></div>
+    <div><label>Aikaväli</label> <input type="date" data-f="from" value="${FLT.from}"> – <input type="date" data-f="to" value="${FLT.to}"></div>
+    <label class="chk" data-only="results"><input type="checkbox" data-f="rej" ${FLT.rej ? 'checked' : ''}> Hylätyt mukaan</label>`;
+  $$('.filters').forEach(el => {
+    el.innerHTML = html;
+    if (el.dataset.filters !== 'results') el.querySelector('[data-only]')?.remove();
+    el.querySelectorAll('[data-p]').forEach(b => b.onclick = () => {
+      const id = b.dataset.p;
+      if (!id) FLT.players.clear(); else FLT.players.has(id) ? FLT.players.delete(id) : FLT.players.add(id);
+      renderDataViews();
+    });
+    el.querySelectorAll('[data-f]').forEach(inp => inp.onchange = () => {
+      const f = inp.dataset.f; FLT[f] = inp.type === 'checkbox' ? inp.checked : inp.value; renderDataViews();
+    });
+  });
+}
+function filtered(includeRej) {
+  return data.reps.filter(r =>
+    (!FLT.players.size || FLT.players.has(r.pelaajaId)) &&
+    (!FLT.type || r.tilanneId === FLT.type) &&
+    (!FLT.base || (r.pesa || '') === FLT.base) &&
+    (!FLT.from || r.pvm >= FLT.from) && (!FLT.to || r.pvm <= FLT.to) &&
+    (includeRej || !r.hylatty));
+}
+function stats(vals) {
+  const a = vals.filter(x => x != null && isFinite(x)).sort((x, y) => x - y), n = a.length;
+  if (!n) return { n: 0 };
+  const med = n % 2 ? a[(n - 1) / 2] : (a[n / 2 - 1] + a[n / 2]) / 2;
+  const mean = a.reduce((s, x) => s + x, 0) / n;
+  const sd = n > 1 ? Math.sqrt(a.reduce((s, x) => s + (x - mean) ** 2, 0) / (n - 1)) : null;
+  return { n, med, mean, sd, min: a[0], max: a[n - 1], neg: a.filter(x => x < 0).length };
+}
+function msCell(x, main) {
+  if (x == null || !isFinite(x)) return `<td class="n muted">–</td>`;
+  return `<td class="n ${main ? 'main' : ''}"><span class="${x < 0 ? 'neg' : ''}">${x < 0 ? '−' : ''}${fiNum(Math.abs(x))}</span></td>`;
+}
+function renderRepsTable() {
+  const reps = filtered(true).sort((a, b) => b.pvm.localeCompare(a.pvm) || (a.video || '').localeCompare(b.video || '') || (a.t0?.t ?? 0) - (b.t0?.t ?? 0));
+  if (!reps.length) { $('#repsTable').innerHTML = '<div class="empty">Ei toistoja valituilla suodattimilla.</div>'; return; }
+  $('#repsTable').innerHTML = `<div class="row" style="margin-bottom:6px"><span class="muted">${reps.length} toistoa</span><span class="grow" style="flex:1"></span><button id="bCsvFilt2">Vie nämä CSV</button></div>
+  <table class="data"><thead><tr><th>Pvm</th><th>Harjoitus</th><th>Pelaaja</th><th>Ärsyke</th><th>Pesä</th><th class="n">Reaktio ms</th><th class="n">Lähtö ms</th><th class="n">Tekniikka ms</th><th class="n">±ms</th><th>Hyl.</th><th>Kommentti</th><th>Video</th><th>Merkitsijä</th><th></th></tr></thead><tbody>
+  ${reps.map(r => `<tr class="${r.hylatty ? 'rej' : ''}" data-id="${r.id}">
+    <td>${fmtDateFi(r.pvm)}</td><td>${esc(r.harjoitus)}</td><td>${esc(playerName(r))}</td><td>${esc(typeName(r))}</td><td>${esc(r.pesa || '')}</td>
+    ${msCell(r.reaktioaika_ms)}${msCell(r.lahtoaika_ms)}${msCell(r.tekniikka_ms)}<td class="n muted">${fiNum(r.tarkkuus_ms, 1)}</td>
+    <td><input type="checkbox" data-rej ${r.hylatty ? 'checked' : ''} title="Hylätty / epävarma"></td>
+    <td><input type="text" data-com value="${esc(r.kommentti)}"></td>
+    <td class="muted" title="${esc(r.video)} · ${fiNum(r.fps_kuvattu)} fps">${esc((r.video || '').slice(0, 22))}</td><td class="muted">${esc(r.merkitsija)}</td>
+    <td><button class="small ghost" data-edit title="Muokkaa merkintöjä (video oltava auki)">✎</button><button class="small ghost" data-del title="Poista">🗑</button></td></tr>`).join('')}
+  </tbody></table>`;
+  $('#bCsvFilt2').onclick = () => exportCSV(reps, 'suodatetut');
+  $$('#repsTable tr[data-id]').forEach(tr => {
+    const id = tr.dataset.id, r = data.reps.find(x => x.id === id);
+    tr.querySelector('[data-rej]').onchange = async e => { r.hylatty = e.target.checked; r.muokattu = new Date().toISOString(); await DB.put('reps', r); tr.classList.toggle('rej', r.hylatty); renderVideoReps(); };
+    tr.querySelector('[data-com]').onchange = async e => { r.kommentti = e.target.value.trim(); r.muokattu = new Date().toISOString(); await DB.put('reps', r); };
+    tr.querySelector('[data-edit]').onclick = () => editRep(id);
+    tr.querySelector('[data-del]').onclick = () => deleteRep(id);
+  });
+}
+function playerColorMap(ids) {
+  // Väri seuraa pelaajaa: kiinteä järjestys (luontijärjestys). Enintään 8 väriä.
+  const all = [...data.players].sort((a, b) => (a.luotu || '').localeCompare(b.luotu || ''));
+  const pool = all.length <= 8 ? all.map(p => p.id) : all.filter(p => ids.includes(p.id)).map(p => p.id);
+  const m = new Map(); pool.forEach((id, i) => { if (i < 8) m.set(id, SERIES[i]); });
+  return m;
+}
+function renderResults() {
+  const box = $('#resultsBody');
+  const repsAll = filtered(true), reps = filtered(FLT.rej), key = FLT.metric;
+  if (!repsAll.length) { box.innerHTML = '<div class="empty">Ei toistoja valituilla suodattimilla. Merkitse toistoja Merkintä-välilehdellä.</div>'; return; }
+  // ryhmät pelaaja × ärsyke × pesä
+  const groups = new Map();
+  for (const r of repsAll) {
+    const k = r.pelaajaId + '|' + r.tilanneId + '|' + (r.pesa || '');
+    if (!groups.has(k)) groups.set(k, { pid: r.pelaajaId, tid: r.tilanneId, name: playerName(r), type: typeName(r) + (r.pesa ? ' · ' + r.pesa : ''), reps: [], rej: 0 });
+    const gg = groups.get(k); if (r.hylatty) gg.rej++;
+    if (!r.hylatty || FLT.rej) gg.reps.push(r);
+  }
+  const rows = [...groups.values()].map(gg => ({ ...gg, st: stats(gg.reps.map(r => r[key])) }))
+    .sort((a, b) => a.type.localeCompare(b.type, 'fi') || (a.st.med ?? 1e9) - (b.st.med ?? 1e9));
+  const metricChips = Object.entries(METRICS).map(([k, l]) => `<button class="chip ${k === key ? 'on' : ''}" data-m="${k}">${l}</button>`).join('');
+  box.innerHTML = `
+    <div class="row" style="flex-wrap:wrap;gap:8px"><span class="t2c">Mittari:</span><div class="chips">${metricChips}</div><span style="flex:1"></span><button id="bCsvFilt">Vie suodatetut CSV</button></div>
+    <div class="card"><h3>${METRICS[key]} pelaajittain, ärsykkeittäin ja pesittäin</h3>
+      <div class="sub">Pääluku on mediaani. Ajat ovat todellisia millisekunteja. ${FLT.rej ? 'Hylätyt toistot ovat mukana laskennassa.' : 'Hylätyt toistot eivät ole mukana laskennassa.'}</div>
+      <table class="data"><thead><tr><th>Pelaaja</th><th>Ärsyke · pesä</th><th class="n">n</th><th class="n">Mediaani</th><th class="n">Keskiarvo</th><th class="n">Keskihajonta</th><th class="n">Paras</th><th class="n">Hylätyt</th><th>Huom.</th></tr></thead><tbody>
+      ${rows.map(r => `<tr><td>${esc(r.name)}</td><td>${esc(r.type)}</td><td class="n">${r.st.n}</td>${msCell(r.st.med, true)}${msCell(r.st.mean)}<td class="n">${r.st.sd == null ? '–' : fiNum(r.st.sd)}</td>${msCell(r.st.min)}<td class="n">${r.rej}</td>
+        <td>${r.st.n < 5 ? `<span class="badge warn" title="Alle 5 toistoa – tulos on epävarma">⚠ pieni otos (n=${r.st.n})</span> ` : ''}${r.st.neg ? `<span class="badge neg" title="Negatiivinen aika = liike ennen ärsykettä">${r.st.neg} × ennakointi</span>` : ''}</td></tr>`).join('')}
+      </tbody></table></div>
+    <div class="card chart" id="chCompare"></div>
+    <div class="grid2"><div class="card chart" id="chTrend"></div><div class="card chart" id="chScatter"></div></div>`;
+  box.querySelectorAll('[data-m]').forEach(b => b.onclick = () => { FLT.metric = b.dataset.m; renderResults(); });
+  $('#bCsvFilt').onclick = () => exportCSV(filtered(FLT.rej), 'suodatetut');
+  drawCompare($('#chCompare'), rows.filter(r => r.st.n), key);
+  drawTrend($('#chTrend'), reps, key);
+  drawScatter($('#chScatter'), reps);
+}
+
+/* ---------- SVG-kaaviot ---------- */
+function niceTicks(lo, hi, count = 6) {
+  const span = hi - lo || 1, raw = span / count, mag = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => span / s <= count) || mag * 10;
+  const t = []; for (let x = Math.floor(lo / step + 1e-9) * step; x < hi + step - 1e-9; x += step) t.push(Math.round(x * 1e6) / 1e6 + 0);   // + 0 poistaa −0:n
+  return t;
+}
+function hash01(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return ((h >>> 0) % 1000) / 1000; }
+function tipAttr(s) { return `data-tip="${esc(s)}"`; }
+function repTip(r) {
+  return `${playerName(r)} · ${typeName(r)}\n${fmtDateFi(r.pvm)}${r.harjoitus ? ' · ' + r.harjoitus : ''}\nReaktio ${fmtMs(r.reaktioaika_ms)} · Lähtö ${fmtMs(r.lahtoaika_ms)} · Tekniikka ${fmtMs(r.tekniikka_ms)}${r.hylatty ? '\n(hylätty)' : ''}${r.kommentti ? '\n“' + r.kommentti + '”' : ''}`;
+}
+function drawCompare(el, rows, key) {
+  el.innerHTML = `<h3>Pelaajavertailu – ${METRICS[key]}</h3><div class="sub">Palkki = mediaani, pisteet = yksittäiset toistot. Katkoviiva = 0 ms.</div>`;
+  if (!rows.length) { el.insertAdjacentHTML('beforeend', '<div class="empty">Ei arvoja tälle mittarille (esim. T1 puuttuu).</div>'); return; }
+  const typesIn = [...new Set(rows.map(r => r.tid))];
+  const multiType = typesIn.length > 1;
+  const typeOrder = typesSorted().map(t => t.id);
+  const tColor = id => SERIES[Math.max(0, typeOrder.indexOf(id)) % 8];
+  if (multiType) el.insertAdjacentHTML('beforeend', `<div class="legend">${typesIn.map(id => `<span><i style="background:${tColor(id)}"></i>${esc(typeById(id)?.nimi ?? id)}</span>`).join('')}</div>`);
+  const W = Math.max(420, el.clientWidth - 24), LBL = 190, RGT = 110, ROW = 30, TOP = 6, AX = 22;
+  const H = TOP + rows.length * ROW + AX;
+  const vals = rows.flatMap(r => r.reps.map(x => x[key]).filter(x => x != null));
+  let lo = Math.min(0, ...vals), hi = Math.max(...vals, 1);
+  const ticks = niceTicks(lo, hi); lo = Math.min(lo, ticks[0]); hi = Math.max(hi, ticks[ticks.length - 1]);
+  const X = x => LBL + 10 + (x - lo) / (hi - lo) * (W - LBL - RGT - 20);
+  let s = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="Pelaajavertailu">`;
+  s += `<g class="grid">${ticks.map(t => `<line x1="${X(t)}" x2="${X(t)}" y1="${TOP}" y2="${H - AX}"/>`).join('')}</g>`;
+  s += ticks.map(t => `<text x="${X(t)}" y="${H - 6}" text-anchor="middle">${fiNum(t)}</text>`).join('');
+  s += `<line class="zero" x1="${X(0)}" x2="${X(0)}" y1="${TOP}" y2="${H - AX}"/>`;
+  rows.forEach((r, i) => {
+    const y = TOP + i * ROW + ROW / 2, c = multiType ? tColor(r.tid) : SERIES[0];
+    const lbl = multiType ? `${r.name} · ${r.type}` : r.name;
+    s += `<text x="${LBL - 8}" y="${y + 4}" text-anchor="end" style="fill:var(--text)">${esc(lbl.length > 30 ? lbl.slice(0, 29) + '…' : lbl)}</text>`;
+    const x0 = X(0), x1 = X(r.st.med), bx = Math.min(x0, x1), bw = Math.max(2, Math.abs(x1 - x0));
+    s += `<rect x="${bx}" y="${y - 6}" width="${bw}" height="12" rx="4" fill="${c}" opacity=".85" ${tipAttr(`${lbl}\nMediaani ${fmtMs(r.st.med)} · n=${r.st.n}\nKeskiarvo ${fmtMs(r.st.mean)} · paras ${fmtMs(r.st.min)}`)}/>`;
+    for (const rep of r.reps) {
+      const val = rep[key]; if (val == null) continue;
+      const jy = y + (hash01(rep.id) - 0.5) * 12;
+      s += `<circle cx="${X(val)}" cy="${jy}" r="4" fill="${val < 0 ? 'var(--neg)' : '#f4f3ee'}" fill-opacity=".8" stroke="#1a1a19" stroke-width="1.5" ${tipAttr(repTip(rep))}/>`;
+    }
+    s += `<text x="${W - RGT + 8}" y="${y + 4}" style="fill:var(--text);font-weight:600">${r.st.med < 0 ? '−' : ''}${fiNum(Math.abs(r.st.med))} ms</text><text x="${W - RGT + 66}" y="${y + 4}" style="fill:${r.st.n < 5 ? 'var(--warn)' : 'var(--muted)'}">${r.st.n < 5 ? '⚠' : ''}n=${r.st.n}</text>`;
+  });
+  s += '</svg>';
+  el.insertAdjacentHTML('beforeend', s);
+}
+function drawTrend(el, reps, key) {
+  el.innerHTML = `<h3>Kehitys ajan yli</h3><div class="sub">${METRICS[key]}: mediaani per päivä (viiva) ja yksittäiset toistot (pienet pisteet).${FLT.type ? '' : ' <span style="color:var(--warn)">Vinkki: valitse yksi ärsyke ja pesä, jotta arvot ovat vertailukelpoisia.</span>'}</div>`;
+  const rs = reps.filter(r => r[key] != null);
+  const dates = [...new Set(rs.map(r => r.pvm))].sort();
+  if (dates.length < 2) { el.insertAdjacentHTML('beforeend', '<div class="empty">Kehityskaavio tarvitsee toistoja vähintään kahdelta eri päivältä.</div>'); return; }
+  const pids = [...new Set(rs.map(r => r.pelaajaId))];
+  const cmap = playerColorMap(pids);
+  const shown = pids.filter(id => cmap.has(id));
+  el.insertAdjacentHTML('beforeend', `<div class="legend">${shown.map(id => `<span><i style="background:${cmap.get(id)}"></i>${esc(playerById(id)?.nimi ?? '?')}</span>`).join('')}${pids.length > shown.length ? `<span class="muted">+${pids.length - shown.length} pelaajaa ei näytetä – rajaa pelaajia suodattimella (max 8)</span>` : ''}</div>`);
+  const W = Math.max(380, el.clientWidth - 24), H = 260, L = 48, R = 14, T = 10, B = 26;
+  const d0 = Date.parse(dates[0]), d1 = Date.parse(dates[dates.length - 1]);
+  const X = d => L + 14 + (Date.parse(d) - d0) / (d1 - d0 || 1) * (W - L - R - 28);
+  const vals = rs.filter(r => cmap.has(r.pelaajaId)).map(r => r[key]);
+  let lo = Math.min(0, ...vals), hi = Math.max(...vals, 1);
+  const ticks = niceTicks(lo, hi, 5); lo = Math.min(lo, ticks[0]); hi = Math.max(hi, ticks[ticks.length - 1]);
+  const Y = x => T + 6 + (1 - (x - lo) / (hi - lo)) * (H - T - B - 12);
+  let s = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="Kehitys ajan yli">`;
+  s += `<g class="grid">${ticks.map(t => `<line x1="${L}" x2="${W - R}" y1="${Y(t)}" y2="${Y(t)}"/>`).join('')}</g>`;
+  s += ticks.map(t => `<text x="${L - 6}" y="${Y(t) + 4}" text-anchor="end">${fiNum(t)}</text>`).join('');
+  if (lo < 0) s += `<line class="zero" x1="${L}" x2="${W - R}" y1="${Y(0)}" y2="${Y(0)}"/>`;
+  const step = Math.ceil(dates.length / Math.max(2, Math.floor((W - L - R) / 70)));
+  dates.forEach((d, i) => { if (i % step === 0 || i === dates.length - 1) s += `<text x="${X(d)}" y="${H - 8}" text-anchor="middle">${fmtDateFi(d).replace(/\.\d{4}$/, '.')}</text>`; });
+  for (const pid of shown) {
+    const c = cmap.get(pid), mine = rs.filter(r => r.pelaajaId === pid);
+    const pts = [...new Set(mine.map(r => r.pvm))].sort().map(d => ({ d, st: stats(mine.filter(r => r.pvm === d).map(r => r[key])) }));
+    for (const r of mine) s += `<circle cx="${X(r.pvm) + (hash01(r.id) - 0.5) * 8}" cy="${Y(r[key])}" r="2.5" fill="${c}" fill-opacity=".45" ${tipAttr(repTip(r))}/>`;
+    if (pts.length > 1) s += `<polyline fill="none" stroke="${c}" stroke-width="2" points="${pts.map(p => `${X(p.d)},${Y(p.st.med)}`).join(' ')}"/>`;
+    for (const p of pts) s += `<circle cx="${X(p.d)}" cy="${Y(p.st.med)}" r="5" fill="${c}" stroke="#1a1a19" stroke-width="2" ${tipAttr(`${playerById(pid)?.nimi} · ${fmtDateFi(p.d)}\nMediaani ${fmtMs(p.st.med)} (n=${p.st.n})`)}/>`;
+  }
+  s += '</svg>';
+  el.insertAdjacentHTML('beforeend', s);
+}
+function drawScatter(el, reps) {
+  el.innerHTML = `<h3>Reaktioaika vs. lähtötekniikka</h3><div class="sub">x = reaktioaika (T1−T0), y = tekniikka (T2−T1). Alavasen = nopea reagointi ja nopea irtoaminen.</div>`;
+  const rs = reps.filter(r => r.reaktioaika_ms != null && r.tekniikka_ms != null);
+  if (rs.length < 2) { el.insertAdjacentHTML('beforeend', '<div class="empty">Tarvitaan toistoja, joissa on merkitty sekä T1 että T2.</div>'); return; }
+  const pids = [...new Set(rs.map(r => r.pelaajaId))], cmap = playerColorMap(pids), shown = pids.filter(id => cmap.has(id));
+  el.insertAdjacentHTML('beforeend', `<div class="legend">${shown.map(id => `<span><i style="background:${cmap.get(id)}"></i>${esc(playerById(id)?.nimi ?? '?')}</span>`).join('')}${pids.length > shown.length ? `<span class="muted">+${pids.length - shown.length} pelaajaa ei näytetä (max 8)</span>` : ''}</div>`);
+  const pts = rs.filter(r => cmap.has(r.pelaajaId));
+  const W = Math.max(380, el.clientWidth - 24), H = 260, L = 48, R = 14, T = 10, B = 34;
+  const xs = pts.map(r => r.reaktioaika_ms), ys = pts.map(r => r.tekniikka_ms);
+  let xl = Math.min(0, ...xs), xh = Math.max(...xs, 1), yl = Math.min(0, ...ys), yh = Math.max(...ys, 1);
+  const xt_ = niceTicks(xl, xh, 5), yt_ = niceTicks(yl, yh, 5);
+  xl = Math.min(xl, xt_[0]); xh = Math.max(xh, xt_[xt_.length - 1]); yl = Math.min(yl, yt_[0]); yh = Math.max(yh, yt_[yt_.length - 1]);
+  const X = x => L + 10 + (x - xl) / (xh - xl) * (W - L - R - 20), Y = y => T + 8 + (1 - (y - yl) / (yh - yl)) * (H - T - B - 16);
+  let s = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="Reaktioaika vs tekniikka">`;
+  s += `<g class="grid">${xt_.map(t => `<line x1="${X(t)}" x2="${X(t)}" y1="${T}" y2="${H - B}"/>`).join('')}${yt_.map(t => `<line x1="${L}" x2="${W - R}" y1="${Y(t)}" y2="${Y(t)}"/>`).join('')}</g>`;
+  s += xt_.map(t => `<text x="${X(t)}" y="${H - B + 14}" text-anchor="middle">${fiNum(t)}</text>`).join('');
+  s += yt_.map(t => `<text x="${L - 6}" y="${Y(t) + 4}" text-anchor="end">${fiNum(t)}</text>`).join('');
+  s += `<text x="${(L + W - R) / 2}" y="${H - 3}" text-anchor="middle">reaktioaika ms</text>`;
+  if (xl < 0) s += `<line class="zero" x1="${X(0)}" x2="${X(0)}" y1="${T}" y2="${H - B}"/>`;
+  for (const r of pts) s += `<circle cx="${X(r.reaktioaika_ms)}" cy="${Y(r.tekniikka_ms)}" r="5" fill="${cmap.get(r.pelaajaId)}" stroke="#1a1a19" stroke-width="2" ${tipAttr(repTip(r))}/>`;
+  s += '</svg>';
+  el.insertAdjacentHTML('beforeend', s);
+}
+/* tooltip */
+const tip = $('#tip');
+document.addEventListener('mouseover', e => { const t = e.target.closest?.('[data-tip]'); if (t) { tip.textContent = t.getAttribute('data-tip'); tip.hidden = false; } });
+document.addEventListener('mouseout', e => { if (e.target.closest?.('[data-tip]')) tip.hidden = true; });
+document.addEventListener('mousemove', e => {
+  if (tip.hidden) return;
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  tip.style.left = Math.min(innerWidth - w - 8, e.clientX + 14) + 'px';
+  tip.style.top = (e.clientY + h + 20 > innerHeight ? e.clientY - h - 10 : e.clientY + 16) + 'px';
+});
+
+/* =====================================================================
+   Vienti ja tuonti
+   ===================================================================== */
+const CSV_COLS = ['toisto_id', 'pvm', 'harjoitus', 'pelaaja', 'tilanne', 'video', 'fps_kuvattu', 't0_ms', 't1_ms', 't2_ms', 'reaktioaika_ms', 'lahtoaika_ms', 'tekniikka_ms', 'tarkkuus_ms', 'hylatty', 'merkitsija', 'kommentti', 'pesa'];
+function csvNum(x, dec = 1) {
+  if (x == null || !isFinite(x)) return '';
+  let s = (Math.round(x * 10 ** dec) / 10 ** dec).toFixed(dec);
+  if (s.includes('.')) s = s.replace(/0+$/, '').replace(/\.$/, '');   // 240.000 → 240, 29.970 → 29.97
+  return s.replace('.', ',');
+}
+function csvFixed(x, dec = 1) { return x == null || !isFinite(x) ? '' : (Math.round(x * 10 ** dec) / 10 ** dec).toFixed(dec).replace('.', ','); }
+function csvCell(s) { s = String(s ?? ''); return /[;"\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+function buildCSV(reps) {
+  const lines = [CSV_COLS.join(';')];
+  for (const r of reps) {
+    lines.push([r.id, r.pvm, r.harjoitus, playerName(r), typeName(r), r.video, csvNum(r.fps_kuvattu, 3),
+      csvFixed(r.t0_ms), csvFixed(r.t1_ms), csvFixed(r.t2_ms), csvFixed(r.reaktioaika_ms), csvFixed(r.lahtoaika_ms), csvFixed(r.tekniikka_ms), csvFixed(r.tarkkuus_ms),
+      r.hylatty ? 1 : 0, r.merkitsija, r.kommentti, r.pesa || ''].map(csvCell).join(';'));
+  }
+  return '﻿' + lines.join('\r\n') + '\r\n';
+}
+function exportCSV(reps, tag) {
+  if (!reps.length) { toast('Ei vietäviä toistoja.', 'warn'); return; }
+  const sorted = [...reps].sort((a, b) => a.pvm.localeCompare(b.pvm) || (a.luotu || '').localeCompare(b.luotu || ''));
+  download(`reaktioajat_${tag}_${todayISO()}.csv`, buildCSV(sorted), 'text/csv;charset=utf-8');
+  toast(`CSV viety (${reps.length} riviä).`, 'ok');
+}
+function buildJSON() {
+  return JSON.stringify({ sovellus: 'reaktioaikalaskuri', versio: 1, viety: new Date().toISOString(), merkitsija: data.settings.merkitsija || '', pelaajat: data.players, tilanteet: data.types, videot: [...data.videos.values()], toistot: data.reps }, null, 1);
+}
+async function importJSON(text) {
+  let o; try { o = JSON.parse(text); } catch (e) { throw new Error('Tiedosto ei ole kelvollista JSONia.'); }
+  if (!o || !Array.isArray(o.toistot)) throw new Error('Tiedosto ei ole reaktioaikalaskurin varmuuskopio.');
+  const pMap = new Map(), tMap = new Map(), newP = [], newT = [];
+  for (const t of o.tilanteet || []) {
+    const ex = typeById(t.id) || data.types.find(x => x.nimi.toLowerCase() === String(t.nimi).toLowerCase());
+    if (ex) tMap.set(t.id, ex.id); else { data.types.push(t); newT.push(t); tMap.set(t.id, t.id); }
+  }
+  for (const p of o.pelaajat || []) {
+    const ex = playerById(p.id) || data.players.find(x => x.nimi.toLowerCase() === String(p.nimi).toLowerCase());
+    if (ex) pMap.set(p.id, ex.id); else { data.players.push(p); newP.push(p); pMap.set(p.id, p.id); }
+  }
+  let added = 0, updated = 0, dup = 0; const put = [];
+  for (const r0 of o.toistot) {
+    if (!r0 || !r0.id) continue;
+    const r = { ...r0 };
+    if (r.pelaajaId && pMap.has(r.pelaajaId)) r.pelaajaId = pMap.get(r.pelaajaId);
+    else if (!playerById(r.pelaajaId)) { const p = (await addPlayer(r.pelaaja || 'Tuntematon')); r.pelaajaId = p.id; }
+    if (r.tilanneId && tMap.has(r.tilanneId)) r.tilanneId = tMap.get(r.tilanneId);
+    const ex = data.reps.find(x => x.id === r.id);
+    if (!ex) { data.reps.push(r); put.push(r); added++; }
+    else if ((r.muokattu || '') > (ex.muokattu || '')) { Object.assign(ex, r); put.push(ex); updated++; }
+    else dup++;
+  }
+  for (const vv of o.videot || []) if (!data.videos.has(vv.key)) { data.videos.set(vv.key, vv); await DB.put('videos', vv); }
+  await DB.putMany('types', newT); await DB.putMany('players', newP); await DB.putMany('reps', put);
+  return { added, updated, dup, players: newP.length, types: newT.length };
+}
+
+/* =====================================================================
+   Asetukset-näkymä
+   ===================================================================== */
+function renderSettings() {
+  $('#setMarker').value = data.settings.merkitsija || '';
+  $('#setDist').value = data.settings.aaniEtaisyys ?? 0;
+  const used = new Set(data.reps.map(r => r.tilanneId));
+  $('#typeList').innerHTML = typesSorted().map(t => `<li data-id="${t.id}"><input type="text" data-k="nimi" value="${esc(t.nimi)}" style="flex:1"><input type="text" data-k="t0" value="${esc(t.t0 || '')}" style="flex:2" placeholder="T0-kuvaus">
+    <button class="small ghost" data-del ${used.has(t.id) ? 'disabled title="Käytössä – ei voi poistaa"' : 'title="Poista"'}>🗑</button></li>`).join('');
+  $$('#typeList li').forEach(li => {
+    const t = typeById(li.dataset.id);
+    li.querySelectorAll('input').forEach(inp => inp.onchange = async () => { const val = inp.value.trim(); if (inp.dataset.k === 'nimi' && !val) { inp.value = t.nimi; return; } t[inp.dataset.k] = val; await DB.put('types', t); renderTypeSelect(); renderFilters(); });
+    li.querySelector('[data-del]').onclick = async () => { if (!confirm(`Poistetaanko ärsyke "${t.nimi}"?`)) return; data.types = data.types.filter(x => x !== t); await DB.del('types', t.id); renderSettings(); renderTypeSelect(); renderFilters(); };
+  });
+  const counts = new Map(); data.reps.forEach(r => counts.set(r.pelaajaId, (counts.get(r.pelaajaId) || 0) + 1));
+  $('#playerList').innerHTML = playersSorted().map(p => `<li data-id="${p.id}"><input type="text" value="${esc(p.nimi)}"><span class="muted" style="width:90px;text-align:right">${counts.get(p.id) || 0} toistoa</span>
+    <button class="small ghost" data-del ${counts.get(p.id) ? 'disabled title="Pelaajalla on toistoja – ei voi poistaa"' : 'title="Poista"'}>🗑</button></li>`).join('') || '<li class="muted">Ei pelaajia. Lisää pelaaja Merkintä-välilehdellä.</li>';
+  $$('#playerList li[data-id]').forEach(li => {
+    const p = playerById(li.dataset.id);
+    li.querySelector('input').onchange = async e => { const val = e.target.value.trim(); if (!val) { e.target.value = p.nimi; return; } p.nimi = val; await DB.put('players', p); data.reps.filter(r => r.pelaajaId === p.id).forEach(r => r.pelaaja = val); await DB.putMany('reps', data.reps.filter(r => r.pelaajaId === p.id)); renderPlayerSelect(); renderFilters(); renderVideoReps(); };
+    li.querySelector('[data-del]').onclick = async () => { if (!confirm(`Poistetaanko pelaaja "${p.nimi}"?`)) return; data.players = data.players.filter(x => x !== p); await DB.del('players', p.id); renderSettings(); renderPlayerSelect(); renderFilters(); };
+  });
+  $('#dbInfo').textContent = `${data.reps.length} toistoa · ${data.players.length} pelaajaa · ${data.types.length} ärsyketyyppiä · ${data.videos.size} videon metatiedot.${DB.db ? '' : ' (IndexedDB EI käytössä!)'}`;
+}
+
+/* =====================================================================
+   Näkymät ja tapahtumat
+   ===================================================================== */
+let VIEW = 'mark';
+function showView(name) {
+  VIEW = name;
+  $$('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.view === name));
+  $$('.view').forEach(s => s.classList.toggle('active', s.id === 'view-' + name));
+  if (name !== 'mark' && !v.paused) v.pause();
+  if (name === 'mark') scheduleRender(); else renderDataViews();
+  if (name === 'settings') renderSettings();
+}
+function renderDataViews() { renderFilters(); if (VIEW === 'reps') renderRepsTable(); if (VIEW === 'results') renderResults(); }
+function renderAll() { renderMarks(); renderVideoReps(); renderFpsInfo(); scheduleRender(); }
+function toggleHelp(force) { const h = $('#help'); h.hidden = force != null ? !force : !h.hidden; }
+
+$$('#tabs button').forEach(b => b.onclick = () => showView(b.dataset.view));
+$('#btnOpen').onclick = $('#btnOpen2').onclick = () => $('#fileInput').click();
+$('#fileInput').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) { showView('mark'); loadFile(f); } };
+$('#btnHelp').onclick = () => toggleHelp(); $('#bHelpClose').onclick = () => toggleHelp(false);
+$('#help').onclick = e => { if (e.target.id === 'help') toggleHelp(false); };
+$('#bBack10').onclick = () => stepFrames(-10); $('#bBack1').onclick = () => stepFrames(-1);
+$('#bFwd1').onclick = () => stepFrames(1); $('#bFwd10').onclick = () => stepFrames(10);
+$('#bPlay').onclick = togglePlay;
+$('#rate').onchange = () => { v.playbackRate = +$('#rate').value; $('#rate').blur(); };
+$('#bMute').onclick = () => { v.muted = !v.muted; $('#bMute').textContent = v.muted ? '🔇' : '🔊'; };
+$('#bZoomReset').onclick = resetZoom;
+$('#bSave').onclick = saveRep; $('#bClear').onclick = clearMarks; $('#bCancelEdit').onclick = () => cancelEdit();
+$('#bSuggest').onclick = suggestT0;
+$('#bDetect').onclick = async () => {
+  if (!S.ready || !hasRVFC) return;
+  const keep = S.curFrame; $('#fpsInfo').textContent = 'Tunnistetaan…';
+  const d = await detectFps(); S.fpsDetected = d;
+  if (d) { S.fpsFile = d; toast('Tunnistettu ' + fiNum(d, d % 1 ? 2 : 0) + ' fps', 'ok'); } else toast('Tunnistus ei onnistunut.', 'warn');
+  saveVideoMeta(); renderFpsControls(); onFpsChange(); gotoFrame(keep);
+};
+$('#inFps').onchange = onFpsChange; $('#selCap').onchange = () => { onFpsChange(); $('#selCap').blur(); }; $('#inCapCustom').onchange = onFpsChange;
+$('#selPlayer').onchange = () => { setSetting('lastPlayer', $('#selPlayer').value); $('#selPlayer').blur(); };
+$('#selType').onchange = () => {
+  setSetting('lastType', $('#selType').value);
+  if ($('#selType').value === 'signaali' && !$('#selBase').value) { $('#selBase').value = '3-pesä'; setSetting('lastBase', '3-pesä'); }
+  renderT0Hint(); renderResult(); $('#selType').blur();
+};
+$('#selBase').onchange = () => { setSetting('lastBase', $('#selBase').value); $('#selBase').blur(); };
+$('#bAddPlayer').onclick = () => { $('#newPlayerRow').hidden = !$('#newPlayerRow').hidden; if (!$('#newPlayerRow').hidden) $('#newPlayer').focus(); };
+const doAddPlayer = async () => { const p = await addPlayer($('#newPlayer').value); if (!p) return; $('#newPlayer').value = ''; $('#newPlayerRow').hidden = true; renderPlayerSelect(); $('#selPlayer').value = p.id; setSetting('lastPlayer', p.id); renderFilters(); toast('Pelaaja lisätty: ' + p.nimi, 'ok'); };
+$('#bAddPlayerOk').onclick = doAddPlayer;
+$('#newPlayer').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); doAddPlayer(); } });
+$('#chkRej').onchange = () => $('#chkRej').blur();
+$('#inDate').onchange = () => setSetting('lastDate', $('#inDate').value);
+$('#setMarker').onchange = () => setSetting('merkitsija', $('#setMarker').value.trim());
+$('#setDist').onchange = () => setSetting('aaniEtaisyys', Math.max(0, parseFloat(String($('#setDist').value).replace(',', '.')) || 0));
+$('#bAddType').onclick = async () => {
+  const n = $('#newTypeName').value.trim(); if (!n) { toast('Anna ärsykkeen nimi.', 'warn'); return; }
+  if (data.types.some(t => t.nimi.toLowerCase() === n.toLowerCase())) { toast('Ärsyke on jo olemassa.', 'warn'); return; }
+  const t = { id: uuid(), nimi: n, t0: $('#newTypeT0').value.trim(), jarj: Math.max(0, ...data.types.map(x => x.jarj || 0)) + 1 };
+  data.types.push(t); await DB.put('types', t); $('#newTypeName').value = $('#newTypeT0').value = '';
+  renderSettings(); renderTypeSelect(); renderFilters(); toast('Ärsyke lisätty.', 'ok');
+};
+$('#bCsvAll').onclick = () => exportCSV(data.reps, 'kaikki');
+$('#bJsonOut').onclick = () => { download(`reaktioajat_varmuuskopio_${todayISO()}.json`, buildJSON(), 'application/json'); toast('JSON-varmuuskopio viety.', 'ok'); };
+$('#bJsonIn').onclick = () => $('#jsonInput').click();
+$('#jsonInput').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try {
+    const r = await importJSON(await f.text());
+    toast(`Tuonti valmis: ${r.added} uutta, ${r.updated} päivitettyä, ${r.dup} duplikaattia ohitettu. Uusia pelaajia ${r.players}, ärsyketyyppejä ${r.types}.`, 'ok', 7000);
+    renderPlayerSelect(); renderTypeSelect(); renderSettings(); renderVideoReps(); renderSessionList(); renderDataViews();
+  } catch (err) { toast('Tuonti epäonnistui: ' + err.message, 'err', 7000); }
+};
+$('#bWipe').onclick = async () => {
+  if (!confirm('Poistetaanko KAIKKI toistot, pelaajat ja asetukset tästä selaimesta? Ota ensin JSON-varmuuskopio!')) return;
+  if (!confirm('Oletko varma? Toimintoa ei voi perua.')) return;
+  for (const s of ['players', 'types', 'reps', 'videos', 'settings']) await DB.clear(s);
+  location.reload();
+};
+
+/* raahaa ja pudota */
+let dragDepth = 0;
+document.addEventListener('dragenter', e => { if ([...(e.dataTransfer?.types || [])].includes('Files')) { dragDepth++; document.body.classList.add('dragging'); } });
+document.addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove('dragging'); } });
+document.addEventListener('dragover', e => e.preventDefault());
+document.addEventListener('drop', e => {
+  e.preventDefault(); dragDepth = 0; document.body.classList.remove('dragging');
+  const f = [...(e.dataTransfer?.files || [])].find(f => /^video\//.test(f.type) || /\.(mp4|mov|m4v|webm|mkv)$/i.test(f.name));
+  if (f) { showView('mark'); loadFile(f); }
+  else if (e.dataTransfer?.files?.length) {
+    const j = [...e.dataTransfer.files].find(f => /\.json$/i.test(f.name));
+    if (j) { $('#jsonInput').files = e.dataTransfer.files; $('#jsonInput').onchange({ target: { files: [j], set value(x) { } } }); }
+    else toast('Pudotettu tiedosto ei ole video.', 'err');
+  }
+});
+
+/* näppäimistö */
+document.addEventListener('keydown', e => {
+  const t = e.target, tag = t.tagName;
+  const typing = (tag === 'INPUT' && !['checkbox', 'radio', 'button', 'range'].includes(t.type)) || tag === 'TEXTAREA' || tag === 'SELECT' || t.isContentEditable;
+  if (e.key === 'Escape') {
+    if (!$('#help').hidden) toggleHelp(false);
+    else if (typing) t.blur();
+    else if (S.suggestion) rejectSuggestion();
+    else if (S.editingId) cancelEdit();
+    return;
+  }
+  if (typing) { if (e.key === 'Enter' && t.id === 'comment' && VIEW === 'mark') { e.preventDefault(); saveRep(); t.blur(); } return; }
+  if (e.key === '?') { e.preventDefault(); toggleHelp(); return; }
+  if (VIEW !== 'mark' || !$('#help').hidden) return;
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); return; }
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const k = e.key;
+  let handled = true;
+  if (k === 'ArrowRight') stepFrames(e.shiftKey ? 10 : 1);
+  else if (k === 'ArrowLeft') stepFrames(e.shiftKey ? -10 : -1);
+  else if (k === ' ' || e.code === 'Space') togglePlay();
+  else if (k === 'Enter') saveRep();
+  else if (k === 'Home') gotoFrame(0);
+  else if (k === 'End') gotoFrame(maxFrame());
+  else if (k === '[' || k === ']') {
+    const sel = $('#rate'); sel.selectedIndex = clamp(sel.selectedIndex + (k === ']' ? 1 : -1), 0, sel.options.length - 1);
+    v.playbackRate = +sel.value; toast('Nopeus ' + sel.options[sel.selectedIndex].text, '', 1200);
+  }
+  else if (k === '+') zoomAt(stage.clientWidth / 2, stage.clientHeight / 2, 1.25);
+  else if (k === '-') zoomAt(stage.clientWidth / 2, stage.clientHeight / 2, 1 / 1.25);
+  else if (k === '0') resetZoom();
+  else if (k === '1' || k === '2' || k === '3') gotoMark('t' + (+k - 1));
+  else {
+    switch (k.toLowerCase()) {
+      case 'q': setMark('t0'); break;
+      case 'w': setMark('t1'); break;
+      case 'e': setMark('t2'); break;
+      case 'a': suggestT0(); break;
+      case 'h': $('#chkRej').checked = !$('#chkRej').checked; toast($('#chkRej').checked ? 'Merkitty hylätyksi / epävarmaksi' : 'Hylätty-merkintä poistettu', '', 1500); break;
+      case 'm': $('#bMute').click(); break;
+      default: handled = false;
+    }
+  }
+  if (handled) e.preventDefault();
+});
+document.addEventListener('click', e => { const b = e.target.closest('button'); if (b) b.blur(); });
+window.addEventListener('resize', () => { scheduleRender(); if (VIEW === 'results') renderResults(); });
+window.addEventListener('beforeunload', e => { if (MARK_KEYS.some(k => S.marks[k])) { e.preventDefault(); e.returnValue = ''; } });
+
+/* käynnistys */
+(async function init() {
+  await loadAll();
+  if (TEST_DB) { $('header h1').insertAdjacentHTML('beforeend', ' <span class="badge warn">TESTITIETOKANTA</span>'); document.title += ' (testi)'; }
+  $('#inDate').value = todayISO();
+  $('#inSession').value = data.settings.lastSession || '';
+  $('#selBase').value = data.settings.lastBase || '';
+  renderPlayerSelect(); renderTypeSelect(); renderSessionList(); renderFilters(); renderAll(); applyZoom();
+  if (!hasRVFC) toast('Selain ei tue requestVideoFrameCallback-rajapintaa – kuva-ajat ovat arvioita. Käytä Chromea tai Edgeä.', 'warn', 9000);
+})();
+
+/* Testirajapinta (käytetään automaattitesteissä) */
+window.RA = {
+  S, data, DB, loadFile, gotoFrame, stepFrames, setMark, saveRep, suggestT0, acceptSuggestion, buildCSV, buildJSON, importJSON, addPlayer,
+  renderPlayerSelect, onFpsChange, stats, fpsFromTimes,
+  idle: async () => { while (NAV.busy) await NAV.p; await new Promise(r => requestAnimationFrame(() => r())); },
+};
+</script>
+</body>
+</html>

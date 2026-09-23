@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="fi">
+<head>
+<meta charset="utf-8">
+<title>Mobiiliversion testit</title>
+<style>
+  :root{color-scheme:dark}
+  body{margin:0;background:#121211;color:#f4f3ee;font:13px/1.45 system-ui,"Segoe UI",sans-serif;display:flex;flex-wrap:wrap;align-items:flex-start;gap:12px}
+  #left{flex:1 1 320px;padding:12px 14px;min-width:0}
+  h1{font-size:16px;margin:0 0 8px}
+  button{background:#3987e5;color:#fff;border:0;border-radius:6px;padding:6px 12px;cursor:pointer;margin:0 6px 6px 0}
+  #log div{padding:2px 0;border-bottom:1px solid #232321;white-space:pre-wrap}
+  .ok{color:#1baf7a}.fail{color:#e66767;font-weight:700}.info{color:#c3c2b7}.head{color:#eda100;font-weight:700;margin-top:6px}
+  #summary{font-size:15px;font-weight:700;margin:8px 0}
+  .phone{flex:none;padding:6px;order:-1;position:sticky;top:0}
+  iframe{border:2px solid #383835;border-radius:18px;background:#000}
+  #app{width:min(390px,calc(100vw - 16px));height:min(780px,calc(100vh - 16px))}
+  #desk{width:40px;height:40px;opacity:.02;position:fixed;right:0;bottom:0;border:0;pointer-events:none}
+</style>
+</head>
+<body>
+<div id="left">
+  <h1>Mobiiliversion (index.html) automaattitestit</h1>
+  <p class="info">Puhelinkokoinen näkymä (390×780). Testi napauttaa oikeita kosketusnappeja ja tarkistaa videosta, että näkyvä kuva on oikea. Lopuksi tarkistetaan, että läppäriversio näkee samat toistot. Testit käyttävät erillistä testitietokantaa.</p>
+  <button id="run">Aja testit</button>
+  <div id="summary"></div>
+  <div id="log"></div>
+</div>
+<div class="phone"><iframe id="app" src="../index.html?db=testi"></iframe></div>
+<iframe id="desk"></iframe>
+<script src="testivideo.js"></script>
+<script>
+'use strict';
+const logEl = document.getElementById('log');
+let pass = 0, fail = 0;
+function log(msg, cls = 'info') { const d = document.createElement('div'); d.className = cls; d.textContent = msg; logEl.appendChild(d); d.scrollIntoView({ block: 'nearest' }); }
+function check(c, msg) { if (c) { pass++; log('✔ ' + msg, 'ok'); } else { fail++; log('✘ ' + msg, 'fail'); } return c; }
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+async function runTests() {
+  pass = fail = 0; logEl.innerHTML = ''; document.getElementById('summary').textContent = 'Käynnissä…';
+  const W_ = document.getElementById('app').contentWindow, D = W_.document, MA = W_.MA;
+  const tap = async sel => { const el = typeof sel === 'string' ? D.querySelector(sel) : sel; if (!el) throw new Error('ei löydy: ' + sel); el.click(); await MA.idle(); };
+  const shown = () => readFrameNumber(D.getElementById('v'));
+  // tyhjä testikanta
+  for (const s of ['players', 'reps', 'videos', 'settings']) await MA.DB.clear(s);
+  MA.data.players = []; MA.data.reps = []; MA.data.videos.clear(); MA.data.settings = {};
+
+  const specs = [TEST_SPECS[0], TEST_SPECS[1]];
+  const expected = [];
+  for (const spec of specs) {
+    log(`${spec.label} – ${spec.name}`, 'head');
+    const blob = await generateVideo(spec);
+    await MA.loadFile(new W_.File([blob], spec.name, { type: 'video/webm' })); await MA.idle();
+    check(MA.S.ready && D.getElementById('scrMark').classList.contains('on'), 'video avautui merkintänäkymään');
+    check(MA.S.fpsDetected === spec.fps, `fps tunnistettu: ${MA.S.fpsDetected}`);
+    const badge = D.getElementById('fpsBadge');
+    check(badge.classList.contains('warn'), `fps-merkki keltainen ennen kuittausta: "${badge.textContent}"`);
+    // fps-kuittaus alapaneelista
+    await tap('#fpsBadge');
+    if (spec.capFps) await tap(`#sheet [data-f="${spec.capFps}"]`); else await tap('#sheet [data-f="0"]');
+    await tap('#sheet #bSheetOk');
+    check(badge.classList.contains('ok') && MA.S.fpsOk, `kuittauksen jälkeen vihreä: "${badge.textContent}"`);
+    const cap = spec.capFps || spec.fps;
+
+    for (const rep of spec.reps) {
+      // pelaaja, pesä, ärsyke alapaneelista
+      await tap('#ctxBtn');
+      let pb = [...D.querySelectorAll('#sheet [data-p]')].find(b => b.textContent === rep.player);
+      if (!pb) { D.getElementById('newPlayer').value = rep.player; await tap('#bAddP'); pb = [...D.querySelectorAll('#sheet [data-p]')].find(b => b.textContent === rep.player); }
+      await tap(pb);
+      await tap(`#sheet [data-b="${rep.type === 'signaali' ? '3-pesä' : '2-pesä'}"]`);
+      await tap(`#sheet [data-t="${rep.type}"]`);
+      await tap('#sheet #bSheetOk');
+      check(D.getElementById('ctxBtn').textContent.startsWith(rep.player), `kontekstirivi: "${D.getElementById('ctxBtn').textContent.trim()}"`);
+      // T0: siirry 21 kuvaa ennen → +10 +10 +1
+      await MA.gotoFrame(rep.t0 - 21); await MA.idle();
+      await tap('[data-step="10"]'); await tap('[data-step="10"]'); await tap('[data-step="1"]');
+      let f = shown(); check(f === rep.t0 && MA.S.curFrame === rep.t0, `+10 +10 +1 → kuva ${rep.t0}: videossa ${f}, sovellus ${MA.S.curFrame}`);
+      await tap('.tb[data-k=t0]');
+      check(D.querySelector('.tb[data-k=t0]').classList.contains('set'), 'T0-nappi täyttyi värillä');
+      // T1: ohi ja takaisin −1 −1
+      await MA.gotoFrame(rep.t1 + 2); await MA.idle(); await tap('[data-step="-1"]'); await tap('[data-step="-1"]');
+      f = shown(); check(f === rep.t1, `−1 −1 → kuva ${rep.t1}: videossa ${f}`);
+      await tap('.tb[data-k=t1]');
+      // T2: jog-nauhalla 3 kuvaa eteen (48 px)
+      await MA.gotoFrame(rep.t2 - 3); await MA.idle();
+      const jog = D.getElementById('jog'), r = jog.getBoundingClientRect(), y = r.top + r.height / 2, x0 = r.left + r.width / 2;
+      const pe = (type, x) => jog.dispatchEvent(new W_.PointerEvent(type, { pointerId: 7, clientX: x, clientY: y, bubbles: true, isPrimary: true, pointerType: 'touch' }));
+      pe('pointerdown', x0); for (let dx = 8; dx <= 48; dx += 8) { pe('pointermove', x0 + dx); await sleep(20); } pe('pointerup', x0 + 48); await MA.idle();
+      f = shown(); check(f === rep.t2, `jog-veto 48 px (3 kuvaa) → kuva ${rep.t2}: videossa ${f}`);
+      await tap('.tb[data-k=t2]');
+      check(!D.getElementById('bSave').disabled, 'Tallenna aktiivinen');
+      const n0 = MA.data.reps.length;
+      await tap('#bSave'); await sleep(80);
+      check(MA.data.reps.length === n0 + 1 && !D.getElementById('card').hidden, 'tallennettu ja tuloskortti näkyy');
+      const saved = MA.data.reps[MA.data.reps.length - 1];
+      const one = 1000 / cap, expR = (rep.t1 - rep.t0) / cap * 1000, expL = (rep.t2 - rep.t0) / cap * 1000;
+      check(Math.abs(saved.reaktioaika_ms - expR) <= one + 0.6, `reaktioaika ${saved.reaktioaika_ms.toFixed(1)} ms (odotettu ${expR.toFixed(1)})`);
+      check(Math.abs(saved.lahtoaika_ms - expL) <= one + 0.6, `lähtöaika ${saved.lahtoaika_ms.toFixed(1)} ms (odotettu ${expL.toFixed(1)})`);
+      check(saved.pesa && saved.fps_kuitattu === true, `pesä "${saved.pesa}", fps kuitattu`);
+      const cardTxt = D.getElementById('card').textContent;
+      if (expR < 0) check(/ENNAKOINTI/.test(cardTxt), 'negatiivinen reaktio → ENNAKOINTI-korostus kortissa');
+      check(D.querySelector('#card .res b').textContent.replace('−', '-').replace(/\s/g, '') === Math.round(saved.lahtoaika_ms).toString(), 'kortti näyttää lähtöajan isolla');
+      expected.push(saved);
+    }
+    // Kumoa tallennus palauttaa merkinnät
+    const last = MA.data.reps.length;
+    await tap('#bUndoSave'); await sleep(50);
+    check(MA.data.reps.length === last - 1 && MA.S.marks.t0 && MA.S.marks.t2, 'Kumoa tallennus: toisto poistui ja merkinnät palautuivat');
+    await tap('#bSave'); await sleep(50);
+    expected[expected.length - 1] = MA.data.reps[MA.data.reps.length - 1];
+    await tap('#bCardClose');
+    // Kumoa-nappi merkinnälle
+    await tap('.tb[data-k=t0]'); await tap('.tb[data-k=t1]'); await tap('#bUndo');
+    check(MA.S.marks.t0 && !MA.S.marks.t1, 'Kumoa poisti viimeisimmän merkinnän');
+    await tap('#bUndo');
+  }
+
+  log('Tänään-näkymä ja vienti', 'head');
+  await tap('#bBack'); await sleep(200);
+  const day = D.getElementById('inDate').value;
+  const n = MA.data.reps.filter(r => r.pvm === day).length;
+  check(D.getElementById('scrHome').classList.contains('on') && D.querySelectorAll('#todayList .rep').length === n, `Tänään-lista näyttää ${n} toistoa`);
+  const csv = MA.buildCSV(MA.data.reps);
+  check(csv.split('\r\n')[0] === '﻿toisto_id;pvm;harjoitus;pelaaja;tilanne;video;fps_kuvattu;t0_ms;t1_ms;t2_ms;reaktioaika_ms;lahtoaika_ms;tekniikka_ms;tarkkuus_ms;hylatty;merkitsija;kommentti;pesa', 'CSV-otsikko sama kuin läppäriversiossa');
+
+  log('Yhteensopivuus läppäriversion kanssa', 'head');
+  const desk = document.getElementById('desk');
+  desk.src = '../reaktioaika.html?db=testi&t=' + Date.now(); await new Promise(r => desk.onload = r); await sleep(800);
+  const RA = desk.contentWindow.RA;
+  check(RA.data.reps.length === MA.data.reps.length, `läppäriversio näkee samat ${RA.data.reps.length} toistoa (sama tietokanta samalla laitteella)`);
+  const byId = arr => [...arr].sort((x, y) => x.id.localeCompare(y.id));
+  check(RA.buildCSV(byId(RA.data.reps)) === MA.buildCSV(byId(MA.data.reps)), 'läppärin ja mobiilin CSV-vienti ovat merkki merkiltä samat');
+  const res = await RA.importJSON(MA.buildJSON());
+  check(res.added === 0 && res.dup === MA.data.reps.length, 'mobiilin JSON tuotuna läppäriin: ei duplikaatteja');
+
+  document.getElementById('summary').innerHTML = fail ? `<span class="fail">${fail} epäonnistui</span>, ${pass} ok` : `<span class="ok">Kaikki ${pass} tarkistusta ok</span>`;
+  window.TEST_RESULT = { pass, fail };
+}
+document.getElementById('run').onclick = () => runTests().catch(e => { log('VIRHE: ' + e.stack, 'fail'); window.TEST_RESULT = { error: String(e) }; });
+</script>
+</body>
+</html>

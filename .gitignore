@@ -1,0 +1,7 @@
+.claude/
+*.webm
+*.mp4
+*.mov
+*.MOV
+*.csv
+reaktioajat_*.json

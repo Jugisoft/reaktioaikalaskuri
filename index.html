@@ -1,0 +1,935 @@
+<!doctype html>
+<html lang="fi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111111">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Reaktioaika">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<title>Reaktioaika</title>
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#000; --s1:#111; --s2:#1c1c1b; --s3:#2a2a28; --line:#3a3a37;
+  --text:#fff; --text2:#d2d1c8; --muted:#9a998f;
+  --accent:#3987e5; --t0:#eda100; --t1:#1baf7a; --t2:#eb6834;
+  --neg:#ff5c5c; --warn:#ffc233; --ok:#2fd08f;
+  --safe-b:env(safe-area-inset-bottom,0px); --safe-t:env(safe-area-inset-top,0px);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:16px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overscroll-behavior:none}
+body{overflow:hidden}
+button,input,select{font:inherit;color:inherit}
+button{touch-action:manipulation;user-select:none;-webkit-user-select:none;cursor:pointer;border:0;border-radius:12px;background:var(--s3);color:var(--text);font-weight:700;min-height:48px;padding:0 14px}
+button:active{filter:brightness(1.35)}
+button:disabled{opacity:.35}
+input[type=text],input[type=date],input[type=number]{background:var(--s2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-height:48px;width:100%}
+.num{font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+[hidden]{display:none!important}
+.screen{position:fixed;inset:0;display:none}
+.screen.on{display:flex}
+
+/* ---------- Tänään ---------- */
+#scrHome{flex-direction:column;overflow-y:auto;padding:calc(12px + var(--safe-t)) 14px calc(24px + var(--safe-b));gap:12px}
+.hrow{display:flex;gap:10px;align-items:center}
+.hrow h1{font-size:22px;margin:0;flex:1}
+.fld{display:flex;flex-direction:column;gap:4px;flex:1;min-width:0}
+.fld label{font-size:13px;color:var(--muted)}
+.big{min-height:72px;font-size:22px;border-radius:16px}
+.primary{background:var(--accent);color:#fff}
+.banner{border-radius:12px;padding:10px 12px;font-size:15px}
+.banner.warn{background:rgba(255,194,51,.14);border:1px solid var(--warn)}
+.banner.info{background:rgba(57,135,229,.16);border:1px solid var(--accent)}
+.banner button{margin-top:8px;min-height:44px}
+.card{background:var(--s1);border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+.card h2{font-size:15px;margin:0 0 6px;color:var(--text2);font-weight:600}
+.pgrp{border-top:1px solid var(--line);padding:8px 0 4px}
+.pgrp:first-of-type{border-top:0}
+.phead{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.phead b{font-size:17px}
+.phead span{font-size:14px;color:var(--text2)}
+.rep{display:flex;gap:8px;align-items:center;min-height:48px;padding:4px 6px;border-radius:10px;font-size:15px;width:100%;background:transparent;font-weight:400;text-align:left;justify-content:flex-start}
+.rep:active{background:var(--s3)}
+.rep .v{font-weight:700;min-width:68px}
+.rep.rej{color:var(--muted);text-decoration:line-through}
+.negv{color:var(--neg)}
+.btnrow{display:flex;gap:10px;flex-wrap:wrap}
+.btnrow button{flex:1;min-width:140px}
+details summary{min-height:48px;display:flex;align-items:center;color:var(--text2);cursor:pointer}
+
+/* ---------- Merkintä ---------- */
+#scrMark{display:none;grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(120px,1fr) auto auto;grid-template-areas:"top" "video" "nav" "marks";padding-bottom:var(--safe-b)}
+#scrMark.on{display:grid}
+.m-top{grid-area:top;min-width:0;display:flex;flex-direction:column;gap:4px;padding:calc(6px + var(--safe-t)) 8px 6px;background:var(--s1)}
+.ctxrow{display:flex;gap:6px;align-items:center;min-width:0}
+.ctxrow .back{width:48px;padding:0;font-size:24px;flex:none}
+#ctxBtn{flex:1;min-width:0;text-align:left;justify-content:flex-start;background:var(--s2);font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.inforow{display:flex;gap:8px;align-items:center;font-size:14px}
+#fpsBadge{min-height:36px;padding:0 10px;border-radius:18px;font-size:14px}
+#fpsBadge.ok{background:rgba(47,208,143,.18);color:var(--ok);border:1px solid var(--ok)}
+#fpsBadge.warn{background:rgba(255,194,51,.18);color:var(--warn);border:1px solid var(--warn)}
+#frameNo{margin-left:auto;font-size:15px}
+.m-video{grid-area:video;position:relative;overflow:hidden;background:#000;touch-action:none}
+.m-video video{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:contain;transform-origin:0 0;pointer-events:none}
+#flash{position:absolute;inset:0;border:6px solid transparent;pointer-events:none;transition:border-color .2s}
+#zoomTag{position:absolute;right:8px;top:8px;background:rgba(0,0,0,.7);border-radius:8px;padding:2px 8px;font-size:13px;pointer-events:none}
+#hudMarks{position:absolute;left:8px;top:8px;display:flex;gap:6px;pointer-events:none}
+#hudMarks span{color:#000;font-weight:800;border-radius:6px;padding:1px 8px}
+.m-nav{grid-area:nav;min-width:0;background:var(--s1);padding:6px 8px 4px;display:flex;flex-direction:column;gap:6px}
+#tl{display:block;width:100%;height:40px;border-radius:8px;background:var(--s2);touch-action:none}
+#jog{height:60px;margin:0 16px;border-radius:12px;touch-action:none;position:relative;overflow:hidden;
+  background-color:var(--s2);border:1px solid var(--line);
+  background-image:repeating-linear-gradient(90deg,transparent 0 14px,rgba(255,255,255,.32) 14px 16px);}
+#jog::after{content:"◀  vedä = kuva kerrallaan  ▶";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--text2);pointer-events:none;text-shadow:0 0 4px #000,0 0 8px #000}
+#jog.active{border-color:var(--accent)}
+.steps{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.steps button{min-height:56px;font-size:18px;padding:0}
+.m-marks{grid-area:marks;min-width:0;background:var(--s1);padding:6px 8px 8px;display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line)}
+.tbtns{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.tb{min-height:72px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;padding:2px;border:2px solid var(--line);background:var(--s2);line-height:1.15}
+.tb .n{font-size:20px;font-weight:800}
+.tb .d{font-size:13px;font-weight:600;color:var(--text2)}
+.tb .f{font-size:14px;font-weight:700}
+.tb[data-k=t0]{border-color:var(--t0)} .tb[data-k=t1]{border-color:var(--t1)} .tb[data-k=t2]{border-color:var(--t2)}
+.tb.set{color:#000} .tb.set .d{color:#000}
+.tb[data-k=t0].set{background:var(--t0)} .tb[data-k=t1].set{background:var(--t1)} .tb[data-k=t2].set{background:var(--t2)}
+#vals{font-size:16px;text-align:center;min-height:22px}
+.saverow{display:flex;gap:24px;align-items:stretch}
+#bUndo{width:104px;min-height:64px;flex:none}
+#bSave{flex:1;min-height:64px;font-size:20px;background:var(--accent);color:#fff}
+#bSave:disabled{background:var(--s3);color:var(--muted);opacity:1}
+
+@media (orientation:landscape) and (max-height:560px){
+  #scrMark{grid-template-columns:minmax(0,1fr) 230px;grid-template-rows:auto minmax(0,1fr) auto;grid-template-areas:"video top" "video marks" "nav marks"}
+  .m-top{padding-top:6px}
+  .m-marks{border-top:0;border-left:1px solid var(--line);overflow-y:auto;gap:6px;padding-top:4px}
+  .m-top{border-left:1px solid var(--line)}
+  .tbtns{grid-template-columns:1fr;gap:6px}
+  .tb{min-height:48px;flex-direction:row;gap:8px}
+  #vals{font-size:14px;min-height:0}
+  .saverow{gap:10px}
+  #bUndo{width:76px;min-height:52px;padding:0 6px}
+  #bSave{min-height:52px;font-size:18px}
+  #fpsBadge{min-height:32px}
+  .m-nav{flex-direction:row;flex-wrap:wrap;align-items:center}
+  #tl{flex-basis:100%;height:34px}
+  #jog{flex:1;height:52px;margin:0 12px 0 24px}
+  .steps{flex:1.4}
+  .steps button{min-height:52px}
+  .inforow{flex-wrap:wrap}
+}
+
+/* ---------- alapaneelit ja kortit ---------- */
+.backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:20}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:21;background:var(--s1);border-radius:18px 18px 0 0;border-top:1px solid var(--line);padding:10px 14px calc(16px + var(--safe-b));max-height:88dvh;overflow-y:auto}
+.sheet h3{font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:12px 0 8px}
+.sheet .grip{width:44px;height:5px;border-radius:3px;background:var(--line);margin:0 auto 6px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chips button{min-height:52px;flex:1 1 30%;font-size:16px;background:var(--s2);border:2px solid var(--line)}
+.chips button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.chips.recent button{flex:1 1 45%;font-size:17px}
+.addrow{display:flex;gap:8px;margin-top:8px}
+.addrow button{flex:none}
+#card{position:fixed;left:8px;right:8px;bottom:calc(8px + var(--safe-b));z-index:15;background:#0d0d0c;border:2px solid var(--line);border-radius:18px;padding:12px 14px;box-shadow:0 -6px 30px rgba(0,0,0,.7)}
+#card .who{font-size:15px;color:var(--text2);margin-bottom:4px}
+#card .res{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+#card .res div{background:var(--s2);border-radius:12px;padding:6px 10px}
+#card .res small{display:block;font-size:13px;color:var(--muted);font-weight:700;letter-spacing:.05em}
+#card .res b{font-size:44px;line-height:1.05}
+#card .res b.neg{color:var(--neg)}
+#card .note{margin-top:6px;font-size:15px}
+#card .note .negtag{background:var(--neg);color:#000;font-weight:800;border-radius:6px;padding:1px 8px}
+#card .note .warntag{background:var(--warn);color:#000;font-weight:800;border-radius:6px;padding:1px 8px}
+#card .row2{display:flex;gap:8px;margin-top:10px;align-items:center}
+#card .next{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+#card .next button{flex:1 1 28%;min-height:48px;font-size:15px;background:var(--s2)}
+#toast{position:fixed;left:50%;top:calc(12px + var(--safe-t));transform:translateX(-50%);z-index:40;background:#222;border:1px solid var(--line);border-radius:12px;padding:10px 14px;max-width:92vw;font-size:15px;box-shadow:0 4px 18px rgba(0,0,0,.6)}
+#toast.err{border-color:var(--neg)} #toast.ok{border-color:var(--ok)} #toast.warn{border-color:var(--warn)}
+.fpsopts{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.fpsopts button{min-height:56px;background:var(--s2);border:2px solid var(--line)}
+.fpsopts button.on{background:var(--accent);border-color:var(--accent)}
+.hint{font-size:14px;color:var(--text2);margin:6px 0}
+#errBox{position:absolute;inset:0;overflow:auto;background:rgba(0,0,0,.95);padding:14px;font-size:15px}
+#errBox h2{color:var(--neg);font-size:18px;margin:0 0 6px}
+#errBox code{display:block;background:var(--s2);padding:8px;border-radius:8px;word-break:break-all;font-size:12px;user-select:all}
+</style>
+</head>
+<body>
+
+<!-- ================= TÄNÄÄN ================= -->
+<section class="screen on" id="scrHome">
+  <div class="hrow"><h1>Reaktioaika</h1><button id="bInstall" hidden>Asenna</button></div>
+  <div id="iosBanner" class="banner info" hidden>iPhone: lisää sovellus kotinäytölle (<b>Jaa → Lisää Koti-valikkoon</b>) ja avaa se aina kuvakkeesta. Muuten tiedot voivat jäädä selaimeen erilleen tai kadota.</div>
+  <div class="hrow">
+    <div class="fld"><label for="inDate">Päivämäärä</label><input type="date" id="inDate"></div>
+    <div class="fld"><label for="inSession">Harjoitus (valinnainen)</label><input type="text" id="inSession" placeholder="esim. lähtöharjoitus"></div>
+  </div>
+  <label class="big primary" id="bVideo" style="display:flex;align-items:center;justify-content:center;font-weight:800;cursor:pointer">＋ Video
+    <input type="file" id="fileInput" accept="video/*" hidden>
+  </label>
+  <button id="bResume" hidden>Jatka merkintää: <span id="resumeName"></span></button>
+  <div id="backupBanner" class="banner warn" hidden></div>
+  <div class="card">
+    <h2 id="todayTitle">Tämän päivän toistot</h2>
+    <div id="todayList"></div>
+  </div>
+  <div class="card">
+    <h2>Tiedot</h2>
+    <div class="btnrow">
+      <button id="bShareJson">Jaa varmuuskopio</button>
+      <button id="bShareCsv">Jaa CSV</button>
+      <label class="btn" style="flex:1;min-width:140px;display:flex;align-items:center;justify-content:center;min-height:48px;border-radius:12px;background:var(--s3);font-weight:700;cursor:pointer">Tuo JSON<input type="file" id="jsonInput" accept=".json,application/json,text/plain" hidden></label>
+    </div>
+    <p class="hint">Varmuuskopio (JSON) yhdistetään läppärillä: <b>Asetukset → Tuo / yhdistä JSON</b>. Tulokset ja kaaviot: <a href="reaktioaika.html" style="color:var(--accent)">läppäriversio</a>.</p>
+  </div>
+  <details class="card">
+    <summary>Asetukset</summary>
+    <div class="fld" style="margin-bottom:10px"><label for="inMarker">Merkitsijä (nimesi)</label><input type="text" id="inMarker" placeholder="esim. valmentajan nimi"></div>
+    <p class="hint" id="persistInfo"></p>
+    <p class="hint">Video käsitellään vain tässä puhelimessa, eikä sitä lähetetä minnekään. Kuvaa lyhyitä pätkiä (1–3 toistoa per video), niin selaus pysyy nopeana.</p>
+  </details>
+</section>
+
+<!-- ================= MERKINTÄ ================= -->
+<section class="screen" id="scrMark">
+  <div class="m-top">
+    <div class="ctxrow">
+      <button class="back" id="bBack" aria-label="Takaisin">‹</button>
+      <button id="ctxBtn">Valitse pelaaja ▾</button>
+    </div>
+    <div class="inforow">
+      <button id="fpsBadge" class="warn">– fps</button>
+      <span id="frameNo" class="num">Kuva –</span>
+    </div>
+  </div>
+  <div class="m-video" id="stage">
+    <video id="v" playsinline muted preload="auto"></video>
+    <div id="hudMarks"></div>
+    <div id="zoomTag" hidden></div>
+    <div id="flash"></div>
+    <div id="errBox" hidden></div>
+  </div>
+  <div class="m-nav">
+    <canvas id="tl"></canvas>
+    <div id="jog"></div>
+    <div class="steps">
+      <button data-step="-10">−10</button><button data-step="-1">−1</button>
+      <button id="bPlay" aria-label="Toisto">▶</button>
+      <button data-step="1">+1</button><button data-step="10">+10</button>
+    </div>
+  </div>
+  <div class="m-marks">
+    <div class="tbtns">
+      <button class="tb" data-k="t0"><span class="n">T0</span><span class="d">ärsyke</span><span class="f"></span></button>
+      <button class="tb" data-k="t1"><span class="n">T1</span><span class="d">liike</span><span class="f"></span></button>
+      <button class="tb" data-k="t2"><span class="n">T2</span><span class="d">jalka irti</span><span class="f"></span></button>
+    </div>
+    <div id="vals" class="num"></div>
+    <div class="saverow">
+      <button id="bUndo">↶ Kumoa</button>
+      <button id="bSave" disabled>Tallenna ✓</button>
+    </div>
+  </div>
+</section>
+
+<div class="backdrop" id="backdrop" hidden></div>
+<div class="sheet" id="sheet" hidden></div>
+<div id="card" hidden></div>
+<div id="toast" hidden></div>
+
+<script>
+'use strict';
+/* =====================================================================
+   Yhteiset apuvälineet (sama tallennusmuoto kuin läppäriversiossa reaktioaika.html)
+   ===================================================================== */
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const hasRVFC = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
+const FPS_SNAP = [23.976, 24, 25, 29.97, 30, 48, 50, 59.94, 60, 90, 100, 119.88, 120, 180, 200, 239.76, 240, 480, 960];
+const PESAT = ['Kotipesä', '1-pesä', '2-pesä', '3-pesä'];
+const MK = ['t0', 't1', 't2'];
+const MCOL = { t0: '#eda100', t1: '#1baf7a', t2: '#eb6834' };
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+
+function uuid() {
+  try { if (crypto.randomUUID) return crypto.randomUUID(); } catch (e) { }
+  const b = crypto.getRandomValues(new Uint8Array(16)); b[6] = (b[6] & 15) | 64; b[8] = (b[8] & 63) | 128;
+  const h = [...b].map(x => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+function todayISO() { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); }
+function fiNum(x, dec = 0) { return x == null || !isFinite(x) ? '–' : x.toLocaleString('fi-FI', { minimumFractionDigits: dec, maximumFractionDigits: dec }); }
+function msTxt(x) { return x == null || !isFinite(x) ? '–' : (x < 0 ? '−' : '') + fiNum(Math.abs(x)); }
+function fmtDateFi(iso) { if (!iso) return ''; const [y, m, d] = iso.split('-'); return `${+d}.${+m}.${y}`; }
+let toastT;
+function toast(msg, kind = '', ms = 2600) { const t = $('#toast'); t.textContent = msg; t.className = kind; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, ms); }
+function vibrate(p) { try { navigator.vibrate && navigator.vibrate(p); } catch (e) { } }
+function median(a) { const s = a.filter(x => x != null && isFinite(x)).sort((x, y) => x - y), n = s.length; return n ? (n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2) : null; }
+
+/* ---------- IndexedDB (sama kanta kuin läppäriversiossa) ---------- */
+const TEST_DB = new URLSearchParams(location.search).get('db') === 'testi';
+const DB_NAME = TEST_DB ? 'reaktioaikalaskuri-testi' : 'reaktioaikalaskuri';
+const DB = {
+  db: null,
+  async open() {
+    try {
+      this.db = await new Promise((res, rej) => {
+        const r = indexedDB.open(DB_NAME, 1);
+        r.onupgradeneeded = () => { const d = r.result; for (const [n, k] of [['players', 'id'], ['types', 'id'], ['reps', 'id'], ['videos', 'key'], ['settings', 'k']]) if (!d.objectStoreNames.contains(n)) d.createObjectStore(n, { keyPath: k }); };
+        r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+      });
+    } catch (e) { this.db = null; toast('Tallennus ei ole käytettävissä – tiedot eivät säily!', 'err', 8000); }
+  },
+  req(store, mode, fn) {
+    return new Promise((res, rej) => {
+      if (!this.db) { res(null); return; }
+      const tx = this.db.transaction(store, mode); const r = fn(tx.objectStore(store));
+      tx.oncomplete = () => res(r && 'result' in r ? r.result : null); tx.onerror = () => rej(tx.error);
+    });
+  },
+  all(s) { return this.req(s, 'readonly', st => st.getAll()).then(x => x || []); },
+  put(s, o) { return this.req(s, 'readwrite', st => st.put(o)); },
+  putMany(s, arr) { return this.req(s, 'readwrite', st => { arr.forEach(o => st.put(o)); }); },
+  del(s, k) { return this.req(s, 'readwrite', st => st.delete(k)); },
+  clear(s) { return this.req(s, 'readwrite', st => st.clear()); },
+};
+const DEFAULT_TYPES = [
+  { id: 'syotto', nimi: 'Syöttö', t0: 'Syöttö irtoaa lukkarin kädestä (ensimmäinen kuva, jossa pallo ei enää koske sormiin)', jarj: 1 },
+  { id: 'osuma', nimi: 'Lyönnin osuma', t0: 'Maila osuu palloon (ensimmäinen kuva, jossa kontakti näkyy)', jarj: 2 },
+  { id: 'signaali', nimi: 'Mailamiehen signaali (3-pesä)', t0: 'Kaarella oleva mailamies vetää mailan alas (ensimmäinen kuva, jossa liike alkaa)', jarj: 3 },
+];
+const data = { players: [], types: [], reps: [], videos: new Map(), settings: {} };
+async function loadAll() {
+  await DB.open();
+  data.players = await DB.all('players'); data.types = await DB.all('types'); data.reps = await DB.all('reps');
+  (await DB.all('videos')).forEach(v => data.videos.set(v.key, v));
+  (await DB.all('settings')).forEach(s => data.settings[s.k] = s.v);
+  if (!data.types.length) { data.types = DEFAULT_TYPES.map(t => ({ ...t })); await DB.putMany('types', data.types); }
+}
+function setSetting(k, v) { data.settings[k] = v; DB.put('settings', { k, v }); }
+const playerById = id => data.players.find(p => p.id === id);
+const typeById = id => data.types.find(t => t.id === id);
+const playerName = r => playerById(r.pelaajaId)?.nimi ?? r.pelaaja ?? '?';
+const typeName = r => typeById(r.tilanneId)?.nimi ?? r.tilanne ?? '?';
+const typesSorted = () => [...data.types].filter(t => !t.piilotettu).sort((a, b) => (a.jarj ?? 99) - (b.jarj ?? 99));
+const shortType = n => n.replace(/\s*\(.*\)\s*$/, '');
+async function addPlayer(name) {
+  name = (name || '').trim(); if (!name) return null;
+  const ex = data.players.find(p => p.nimi.toLowerCase() === name.toLowerCase()); if (ex) return ex;
+  const p = { id: uuid(), nimi: name, luotu: new Date().toISOString() }; data.players.push(p); await DB.put('players', p); return p;
+}
+
+/* =====================================================================
+   Video ja kuvatarkka siirtyminen (sama logiikka kuin läppäriversiossa)
+   ===================================================================== */
+const v = $('#v');
+const S = {
+  file: null, url: null, videoName: '', videoKey: '', duration: 0, ready: false,
+  fpsFile: 30, fpsDetected: null, fpsCaptured: null, fpsOk: false,
+  firstFrameTime: 0, curMediaTime: 0, curFrame: 0,
+  marks: { t0: null, t1: null, t2: null }, undo: [], editingId: null,
+};
+const capFps = () => S.fpsCaptured || S.fpsFile;
+const factor = () => S.fpsFile / capFps();
+const frameTime = f => S.firstFrameTime + f / S.fpsFile;
+const timeToFrame = t => Math.round((t - S.firstFrameTime) * S.fpsFile);
+const maxFrame = () => Math.max(0, Math.ceil((S.duration - S.firstFrameTime) * S.fpsFile - 0.5) - 1);
+const realMs = t => t * 1000 * factor();
+
+let frameWaiters = [];
+function onFrame(now, md) {
+  // Pysäytettynä hyväksytään vain kuva, joka vastaa videon nykyistä kohtaa. Hidas purku voi tuoda
+  // myöhässä ilmoituksen aiemmasta siirrosta, eikä se saa ylikirjoittaa nykyistä kuvaa.
+  const stale = v.paused && !S.probing && S.fpsFile > 0 && (md.mediaTime > v.currentTime + 1e-4 || v.currentTime - md.mediaTime > 1.5 / S.fpsFile);
+  if (stale) { v.requestVideoFrameCallback(onFrame); return; }
+  S.curMediaTime = md.mediaTime; S.curFrame = timeToFrame(md.mediaTime); S.frameSeq = (S.frameSeq || 0) + 1;
+  const w = frameWaiters; frameWaiters = []; w.forEach(fn => fn(md.mediaTime));
+  scheduleRender(); v.requestVideoFrameCallback(onFrame);
+}
+if (hasRVFC) v.requestVideoFrameCallback(onFrame);
+v.addEventListener('timeupdate', () => { if (!hasRVFC) { S.curMediaTime = v.currentTime; S.curFrame = timeToFrame(v.currentTime); scheduleRender(); } });
+
+const NAV = { busy: false, want: null, target: 0, p: Promise.resolve() };
+function gotoFrame(f) {
+  if (!S.ready) return Promise.resolve();
+  f = clamp(Math.round(f), 0, maxFrame()); NAV.target = f; NAV.want = f;
+  if (!v.paused) v.pause();
+  if (!NAV.busy) NAV.p = seekLoop();
+  return NAV.p;
+}
+async function seekLoop() {
+  NAV.busy = true;
+  try { while (NAV.want !== null) { const f = NAV.want; NAV.want = null; await seekToFrame(f); } }
+  finally { NAV.busy = false; scheduleRender(); }
+}
+function seekToFrame(f) {
+  const dt = 1 / S.fpsFile, expect = frameTime(f);
+  const target = Math.min(expect + dt * 0.5, S.duration - Math.min(dt * 0.25, 0.001));
+  return new Promise(res => {
+    let fin = false, seeked = false;
+    const seq0 = S.frameSeq || 0;
+    const done = () => {
+      if (fin) return; fin = true; v.removeEventListener('seeked', onSeeked);
+      // Selain vahvisti siirron jälkeen näkyvän kuvan (vanhentuneet ilmoitukset on jo suodatettu) → käytä sitä.
+      // Muuten (sama kuva, hidas piirto tai ei rVFC-tukea) näkyvissä on kuva, johon siirryttiin.
+      if (!hasRVFC || (S.frameSeq || 0) === seq0) { S.curMediaTime = expect; S.curFrame = f; }
+      scheduleRender(); res();
+    };
+    const waiter = mt => { if (Math.abs(mt - expect) < dt * 0.51 || seeked) done(); else frameWaiters.push(waiter); };
+    const onSeeked = () => { seeked = true; setTimeout(done, hasRVFC ? 180 : 0); };
+    if (hasRVFC) frameWaiters.push(waiter);
+    v.addEventListener('seeked', onSeeked); setTimeout(done, 2500);
+    v.currentTime = target;
+  });
+}
+function stepFrames(n) { if (S.ready) gotoFrame((NAV.busy ? NAV.target : S.curFrame) + n); }
+
+function waitEvent(el, name, timeout) {
+  return new Promise((res, rej) => {
+    const on = () => { clearTimeout(t); el.removeEventListener(name, on); res(); };
+    const t = setTimeout(() => { el.removeEventListener(name, on); rej(new Error('aikakatkaisu')); }, timeout);
+    el.addEventListener(name, on);
+  });
+}
+function firstFrameTimeProbe() {
+  if (!hasRVFC) return Promise.resolve(0);
+  return new Promise(res => { let fin = false; const done = x => { if (!fin) { fin = true; res(x); } }; frameWaiters.push(done); v.currentTime = 0; setTimeout(() => done(v.readyState >= 2 ? S.curMediaTime : null), 600); });
+}
+async function detectFps() {
+  S.probing = true;
+  try { return await detectFpsInner(); } finally { S.probing = false; }
+}
+async function detectFpsInner() {
+  const start = Math.min(0.1, S.duration * 0.2), ts = new Set();
+  let wait = 70, misses = 0, anyFresh = false;   // jos selain ei ilmoita yhtään kuvaa (hidas laite / piirto hidastettu), odotetaan pidempään
+  for (const [step, n] of [[0.0029, 30], [0.011, 24]]) {
+    const base = start + (ts.size ? 30 * 0.0029 : 0);
+    for (let i = 0; i < n; i++) {
+      const x = base + i * step; if (x >= S.duration) break;
+      const r = await probeAt(x, wait);
+      if (r.fresh) anyFresh = true; else if (!anyFresh && ++misses >= 3 && wait < 400) wait = 400;
+      if (r.t != null) ts.add(Math.round(r.t * 1e6));
+    }
+    if (ts.size >= 8) break;
+  }
+  S.probeLog = { times: [...ts].sort((a, b) => a - b), wait, anyFresh };
+  return fpsFromTimes([...ts].sort((a, b) => a - b).map(x => x / 1e6));
+}
+function probeAt(x, wait = 70) {
+  return new Promise(res => {
+    let got = null, fin = false; const w = mt => { got = mt; };
+    const finish = () => { if (fin) return; fin = true; frameWaiters = frameWaiters.filter(f => f !== w); v.removeEventListener('seeked', onS); res({ t: got ?? S.curMediaTime, fresh: got != null }); };
+    const onS = () => { const t0 = performance.now(); const tick = () => { if (got != null || performance.now() - t0 > wait) finish(); else setTimeout(tick, 4); }; tick(); };
+    frameWaiters.push(w); v.addEventListener('seeked', onS); setTimeout(finish, 1500 + wait); v.currentTime = x;
+  });
+}
+function fpsFromTimes(times) {
+  const d = []; for (let i = 1; i < times.length; i++) { const x = times[i] - times[i - 1]; if (x > 1e-5) d.push(x); }
+  if (d.length < 2) return null;
+  const sorted = [...d].sort((a, b) => a - b), med = sorted[Math.floor(sorted.length / 2)], base = Math.min(med, sorted[0] * 1.6);
+  let frames = 0, sum = 0; for (const x of d) { const k = Math.round(x / base); if (k >= 1 && k <= 4) { frames += k; sum += x; } }
+  if (!frames) return null;
+  const fps = frames / sum;
+  const msRounded = times.every(t => Math.abs(t * 1000 - Math.round(t * 1000)) < 1e-3);
+  if (msRounded) { const r = FPS_SNAP.filter(Number.isInteger).reduce((a, b) => Math.abs(b - fps) < Math.abs(a - fps) ? b : a); if (Math.abs(fps - r) / r < 0.02) return r; }
+  const near = FPS_SNAP.reduce((a, b) => Math.abs(b - fps) < Math.abs(a - fps) ? b : a);
+  return Math.abs(fps - near) / near < 0.02 ? near : Math.round(fps * 100) / 100;
+}
+
+async function loadFile(file) {
+  if (!file) return;
+  S.ready = false; S.editingId = null; S.marks = { t0: null, t1: null, t2: null }; S.undo = [];
+  S.file = file; S.videoName = file.name; S.videoKey = file.name + '|' + file.size;
+  showScreen('mark'); $('#errBox').hidden = true; hideCard(); resetZoom();
+  $('#fpsBadge').textContent = 'Avataan…'; $('#fpsBadge').className = 'warn';
+  if (S.url) URL.revokeObjectURL(S.url);
+  S.url = URL.createObjectURL(file);
+  const errP = new Promise((_, rej) => v.addEventListener('error', () => rej(new Error('Selain ei pysty toistamaan tätä videota.')), { once: true }));
+  v.src = S.url;
+  try { await Promise.race([waitEvent(v, 'loadeddata', 20000), errP]); }
+  catch (e) { return showErr(e.message); }
+  if (!v.videoWidth) return showErr('Videokuvaa ei voitu purkaa.');
+  if (!isFinite(v.duration)) { v.currentTime = 1e9; await waitEvent(v, 'seeked', 8000).catch(() => { }); }
+  S.duration = v.duration;
+  S.probing = true; S.firstFrameTime = 0; const first = await firstFrameTimeProbe(); if (first != null && first < 0.5) S.firstFrameTime = first;
+  $('#fpsBadge').textContent = 'Tunnistetaan fps…';
+  const det = hasRVFC ? await detectFps() : null;
+  S.fpsDetected = det;
+  const saved = data.videos.get(S.videoKey);
+  if (saved) { S.fpsFile = saved.fpsFile; S.fpsCaptured = saved.fpsCaptured || null; S.fpsOk = true; }
+  else {
+    S.fpsFile = det || 30;
+    if (S.fpsFile >= 100) { S.fpsCaptured = null; S.fpsOk = true; }                           // aito high-fps -tiedosto
+    else { const last = +data.settings.lastCap || 0; S.fpsCaptured = last > S.fpsFile ? last : null; S.fpsOk = false; }  // ehdota edellistä, vaatii kuittauksen
+  }
+  S.ready = true;
+  await gotoFrame(0);
+  if (saved) saveVideoMeta();
+  renderAll();
+  $('#resumeName').textContent = S.videoName; $('#bResume').hidden = false;
+  if (!S.fpsOk) toast('Tarkista kuvataajuus: napauta keltaista fps-merkkiä.', 'warn', 4000);
+}
+function showErr(msg) {
+  S.ready = false;
+  $('#errBox').innerHTML = `<h2>Videota ei voitu avata</h2><p>${esc(msg)}</p>
+    <p>Todennäköisin syy on HEVC/H.265-pakkaus. Valitse puhelimen kameran asetuksista <b>H.264</b> (Android: poista HEVC käytöstä; iPhone: Asetukset → Kamera → Formaatit → Yhteensopivin).</p>
+    <p>Muunnos tietokoneella:</p><code>ffmpeg -i "${esc(S.videoName)}" -c:v libx264 -crf 17 -pix_fmt yuv420p -fps_mode passthrough -c:a aac "${esc(S.videoName.replace(/\.[^.]+$/, ''))}_h264.mp4"</code>
+    <p><button onclick="showScreen('home')">‹ Takaisin</button></p>`;
+  $('#errBox').hidden = false; $('#fpsBadge').textContent = '–';
+}
+function saveVideoMeta() {
+  const o = { key: S.videoKey, nimi: S.videoName, koko: S.file?.size, kesto_s: S.duration, fpsFile: S.fpsFile, fpsDetected: S.fpsDetected, fpsCaptured: S.fpsCaptured, paivitetty: new Date().toISOString() };
+  data.videos.set(o.key, o); DB.put('videos', o);
+}
+
+/* =====================================================================
+   Merkinnät ja tallennus
+   ===================================================================== */
+function sel() {
+  return { pid: data.settings.lastPlayer || '', tid: data.settings.lastType || 'syotto', pesa: data.settings.lastBase ?? '' };
+}
+function calc(m, fac) { const d = (a, b) => (a && b) ? (b.t - a.t) * 1000 * fac : null; return { reaktio: d(m.t0, m.t1), lahto: d(m.t0, m.t2), tekniikka: d(m.t1, m.t2) }; }
+function setMark(k) {
+  if (!S.ready) return;
+  S.undo.push(JSON.stringify(S.marks));
+  S.marks[k] = { t: S.curMediaTime, f: S.curFrame, src: 'kuva' };
+  vibrate(30); flash(MCOL[k]); hideCard(); renderMarks();
+}
+function undo() {
+  if (!S.undo.length) { toast('Ei kumottavaa.'); return; }
+  S.marks = JSON.parse(S.undo.pop()); vibrate([20, 40, 20]); renderMarks();
+}
+function flash(c) { const f = $('#flash'); f.style.transition = 'none'; f.style.borderColor = c; requestAnimationFrame(() => { f.style.transition = 'border-color .35s'; f.style.borderColor = 'transparent'; }); }
+async function saveRep() {
+  if (!S.ready) return;
+  const s = sel();
+  if (!playerById(s.pid)) { toast('Valitse ensin pelaaja.', 'err'); openSheet(); return; }
+  const m = S.marks;
+  if (!m.t0 || (!m.t1 && !m.t2)) { toast('Merkitse T0 sekä T1 tai T2.', 'err'); return; }
+  const fac = factor(), r = calc(m, fac), now = new Date().toISOString();
+  const old = S.editingId ? data.reps.find(x => x.id === S.editingId) : null;
+  const rep = {
+    id: old?.id ?? uuid(), pvm: $('#inDate').value || todayISO(), harjoitus: $('#inSession').value.trim(),
+    pelaajaId: s.pid, pelaaja: playerById(s.pid)?.nimi ?? '', tilanneId: s.tid, tilanne: typeById(s.tid)?.nimi ?? '', pesa: s.pesa,
+    video: S.videoName, videoKey: S.videoKey, kesto_s: S.duration, fps_toisto: S.fpsFile, fps_kuvattu: capFps(), kerroin: fac, fps_kuitattu: S.fpsOk,
+    t0: m.t0, t1: m.t1, t2: m.t2,
+    t0_ms: m.t0 ? realMs(m.t0.t) : null, t1_ms: m.t1 ? realMs(m.t1.t) : null, t2_ms: m.t2 ? realMs(m.t2.t) : null,
+    reaktioaika_ms: r.reaktio, lahtoaika_ms: r.lahto, tekniikka_ms: r.tekniikka, tarkkuus_ms: 2000 / capFps(),
+    hylatty: old?.hylatty ?? false, merkitsija: old?.merkitsija || data.settings.merkitsija || '', kommentti: old?.kommentti ?? '',
+    laite: 'mobiili', luotu: old?.luotu ?? now, muokattu: now,
+  };
+  await DB.put('reps', rep);
+  if (old) Object.assign(old, rep); else data.reps.push(rep);
+  setSetting('lastSession', rep.harjoitus);
+  const savedMarks = S.marks;
+  S.marks = { t0: null, t1: null, t2: null }; S.undo = []; S.editingId = null;
+  vibrate([40, 60, 40]); renderMarks(); renderHome();
+  showCard(rep, savedMarks, !!old);
+}
+
+/* ---------- tuloskortti ---------- */
+let cardTimer = null;
+function showCard(rep, savedMarks, wasEdit) {
+  const c = $('#card'), L = rep.lahtoaika_ms, R = rep.reaktioaika_ms;
+  const todays = data.reps.filter(x => x.pelaajaId === rep.pelaajaId && x.pvm === rep.pvm && x.tilanneId === rep.tilanneId && !x.hylatty);
+  const medL = median(todays.map(x => x.lahtoaika_ms));
+  const notes = [];
+  if ((R != null && R < 0) || (L != null && L < 0)) notes.push(`<span class="negtag">ENNAKOINTI ${msTxt(R != null && R < 0 ? R : L)} ms</span>${rep.tilanneId === 'syotto' ? ' mahdollinen varaslähtö' : ''}`);
+  if (L != null && L >= 0 && (L < 60 || L > 1500)) notes.push(`<span class="warntag">Tarkista fps?</span> lähtöaika ${msTxt(L)} ms on epätavallinen`);
+  if (!rep.fps_kuitattu) notes.push(`<span class="warntag">fps kuittaamatta</span>`);
+  const rec0 = (data.settings.recentPlayers || []).filter(id => playerById(id));
+  const recent = [...rec0, ...[...data.players].sort((a, b) => a.nimi.localeCompare(b.nimi, 'fi')).map(p => p.id).filter(id => !rec0.includes(id))].slice(0, 5);
+  c.innerHTML = `<div class="who">${wasEdit ? 'Päivitetty' : 'Tallennettu'}: <b>${esc(rep.pelaaja)}</b> · ${esc(rep.pesa || '–')} · ${esc(shortType(rep.tilanne))}</div>
+    <div class="res"><div><small>LÄHTÖ</small><b class="num ${L < 0 ? 'neg' : ''}">${msTxt(L)}</b> ms</div><div><small>REAKTIO</small><b class="num ${R < 0 ? 'neg' : ''}">${msTxt(R)}</b> ms</div></div>
+    <div class="note muted">Tänään mediaani ${msTxt(medL)} ms (n=${todays.length})</div>
+    ${notes.map(n => `<div class="note">${n}</div>`).join('')}
+    <div class="row2"><button id="bUndoSave" style="flex:1">Kumoa tallennus <span id="undoSec">6</span> s</button><button id="bCardClose" style="width:96px">OK</button></div>
+    <div class="muted" style="font-size:13px;margin-top:8px">Seuraava pelaaja:</div>
+    <div class="next">${recent.map(id => `<button data-p="${id}" class="${id === rep.pelaajaId ? 'on' : ''}">${esc(playerById(id).nimi)}</button>`).join('')}<button data-more>Muu…</button></div>`;
+  c.hidden = false;
+  let sec = 6; clearInterval(cardTimer);
+  cardTimer = setInterval(() => { sec--; const e = $('#undoSec'); if (e) e.textContent = sec; if (sec <= 0) { clearInterval(cardTimer); const b = $('#bUndoSave'); if (b) b.hidden = true; } }, 1000);
+  $('#bUndoSave').onclick = async () => {
+    clearInterval(cardTimer);
+    if (wasEdit) { toast('Muokkausta ei voi kumota – muokkaa toistoa uudelleen.'); return; }
+    await DB.del('reps', rep.id); data.reps = data.reps.filter(x => x.id !== rep.id);
+    S.marks = savedMarks; renderMarks(); renderHome(); hideCard(); toast('Tallennus kumottu – merkinnät palautettu.', 'ok');
+  };
+  $('#bCardClose').onclick = hideCard;
+  c.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { choosePlayer(b.dataset.p); hideCard(); });
+  c.querySelector('[data-more]').onclick = () => { hideCard(); openSheet(); };
+}
+function hideCard() { clearInterval(cardTimer); $('#card').hidden = true; }
+
+/* =====================================================================
+   Valinta-alapaneeli: pelaaja, pesä, ärsyke
+   ===================================================================== */
+function choosePlayer(id) {
+  setSetting('lastPlayer', id);
+  const rec = [id, ...(data.settings.recentPlayers || []).filter(x => x !== id)].slice(0, 6);
+  setSetting('recentPlayers', rec); renderCtx();
+}
+function openSheet() {
+  const s = sel(), rec = (data.settings.recentPlayers || []).filter(id => playerById(id)).slice(0, 6);
+  const others = [...data.players].filter(p => !rec.includes(p.id)).sort((a, b) => a.nimi.localeCompare(b.nimi, 'fi'));
+  const sh = $('#sheet');
+  sh.innerHTML = `<div class="grip"></div>
+    <h3>Pelaaja</h3>
+    ${rec.length ? `<div class="chips recent">${rec.map(id => `<button data-p="${id}" class="${id === s.pid ? 'on' : ''}">${esc(playerById(id).nimi)}</button>`).join('')}</div>` : ''}
+    ${others.length ? `<div class="chips" style="margin-top:8px">${others.map(p => `<button data-p="${p.id}" class="${p.id === s.pid ? 'on' : ''}">${esc(p.nimi)}</button>`).join('')}</div>` : ''}
+    <div class="addrow"><input type="text" id="newPlayer" placeholder="＋ Uusi pelaaja" enterkeyhint="done"><button id="bAddP" class="primary">Lisää</button></div>
+    <h3>Tilanne (pesä)</h3>
+    <div class="chips">${PESAT.map(p => `<button data-b="${p}" class="${p === s.pesa ? 'on' : ''}">${p}</button>`).join('')}</div>
+    <h3>Ärsyke</h3>
+    <div class="chips">${typesSorted().map(t => `<button data-t="${t.id}" class="${t.id === s.tid ? 'on' : ''}">${esc(shortType(t.nimi))}</button>`).join('')}</div>
+    <p class="hint" id="t0hint"></p>
+    <button id="bSheetOk" class="primary" style="width:100%;margin-top:10px;min-height:56px">Valmis</button>`;
+  const upd = () => {
+    const s2 = sel();
+    sh.querySelectorAll('[data-p]').forEach(b => b.classList.toggle('on', b.dataset.p === s2.pid));
+    sh.querySelectorAll('[data-b]').forEach(b => b.classList.toggle('on', b.dataset.b === s2.pesa));
+    sh.querySelectorAll('[data-t]').forEach(b => b.classList.toggle('on', b.dataset.t === s2.tid));
+    const t = typeById(s2.tid); $('#t0hint').innerHTML = t ? `<b style="color:var(--t0)">T0</b> = ${esc(t.t0 || t.nimi)}` : '';
+  };
+  sh.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { choosePlayer(b.dataset.p); upd(); });
+  sh.querySelectorAll('[data-b]').forEach(b => b.onclick = () => { setSetting('lastBase', b.dataset.b); renderCtx(); upd(); });
+  sh.querySelectorAll('[data-t]').forEach(b => b.onclick = () => {
+    setSetting('lastType', b.dataset.t);
+    if (b.dataset.t === 'signaali') setSetting('lastBase', '3-pesä');
+    renderCtx(); upd();
+  });
+  const add = async () => { const p = await addPlayer($('#newPlayer').value); if (!p) return; choosePlayer(p.id); openSheet(); toast('Lisätty: ' + p.nimi, 'ok'); };
+  $('#bAddP').onclick = add;
+  $('#newPlayer').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); add(); } };
+  $('#bSheetOk').onclick = closeSheet;
+  upd(); showSheet();
+}
+function openFpsSheet() {
+  if (!S.ready) return;
+  const sh = $('#sheet'), cur = S.fpsCaptured || 0;
+  const opts = [[0, 'Ei hidastusta'], [120, '120 fps slow-mo'], [240, '240 fps slow-mo'], [480, '480 fps slow-mo']];
+  sh.innerHTML = `<div class="grip"></div>
+    <h3>Kuvataajuus</h3>
+    <p class="hint">Video toistuu <b>${fiNum(S.fpsFile, S.fpsFile % 1 ? 2 : 0)} fps</b>${S.fpsDetected ? ' (tunnistettu)' : ' (arvio)'}.
+    ${S.fpsFile >= 100 ? 'Tiedosto on aito high-fps-video – hidastuskerrointa ei tarvita.' : 'Jos video on kuvattu slow-motionina ja toistuu hidastettuna, valitse kuvaushetken fps. Muuten ajat ovat moninkertaisia.'}</p>
+    <div class="fpsopts">${opts.map(([f, l]) => `<button data-f="${f}" class="${(f || 0) === (cur || 0) ? 'on' : ''}" ${f && f <= S.fpsFile ? 'disabled' : ''}>${l}</button>`).join('')}</div>
+    <div class="addrow" style="margin-top:12px"><input type="number" id="inFps" value="${S.fpsFile}" step="0.01" min="1" inputmode="decimal" aria-label="Videon fps"><button id="bFpsSet">Aseta videon fps</button></div>
+    <p class="hint">Tarkkuus: ±${fiNum(1000 / capFps(), 1)} ms per merkintä, ±${fiNum(2000 / capFps(), 1)} ms per aikaväli.</p>
+    <button id="bSheetOk" class="primary" style="width:100%;margin-top:6px;min-height:56px">Kuittaa: ${S.fpsCaptured ? fiNum(S.fpsCaptured) + ' → ' + fiNum(S.fpsFile) + ' fps' : fiNum(S.fpsFile, S.fpsFile % 1 ? 2 : 0) + ' fps, ei hidastusta'}</button>`;
+  sh.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { setCap(+b.dataset.f || null); openFpsSheet(); });
+  $('#bFpsSet').onclick = () => { const f = parseFloat(String($('#inFps').value).replace(',', '.')); if (f > 0) { S.fpsFile = f; if (S.fpsCaptured && S.fpsCaptured <= f) S.fpsCaptured = null; remapMarks(); saveVideoMeta(); renderAll(); openFpsSheet(); } };
+  $('#bSheetOk').onclick = () => { S.fpsOk = true; saveVideoMeta(); if (S.fpsCaptured) setSetting('lastCap', S.fpsCaptured); else setSetting('lastCap', 0); renderAll(); closeSheet(); };
+  showSheet();
+}
+function setCap(c) { S.fpsCaptured = c && c > S.fpsFile ? c : null; S.fpsOk = true; setSetting('lastCap', S.fpsCaptured || 0); saveVideoMeta(); renderAll(); }
+function remapMarks() { MK.forEach(k => { if (S.marks[k]) S.marks[k].f = timeToFrame(S.marks[k].t); }); S.curFrame = timeToFrame(S.curMediaTime); }
+function showSheet() { $('#backdrop').hidden = false; $('#sheet').hidden = false; }
+function closeSheet() { $('#backdrop').hidden = true; $('#sheet').hidden = true; renderAll(); }
+$('#backdrop').onclick = closeSheet;
+
+/* =====================================================================
+   Piirto
+   ===================================================================== */
+let rq = false;
+function scheduleRender() { if (!rq) { rq = true; requestAnimationFrame(() => { rq = false; drawTimeline(); renderInfo(); }); } }
+function renderAll() { renderCtx(); renderFps(); renderMarks(); scheduleRender(); }
+function renderCtx() {
+  const s = sel(), p = playerById(s.pid), t = typeById(s.tid);
+  $('#ctxBtn').innerHTML = p ? `${esc(p.nimi)} · ${esc(s.pesa || 'pesä?')} · ${esc(t ? shortType(t.nimi) : '?')} ▾` : '<span style="color:var(--warn)">Valitse pelaaja ▾</span>';
+}
+function renderFps() {
+  const b = $('#fpsBadge'); if (!S.ready) return;
+  const f = fiNum(S.fpsFile, S.fpsFile % 1 ? 2 : 0);
+  b.textContent = S.fpsCaptured ? `${fiNum(S.fpsCaptured)}→${f} · ${fiNum(S.fpsCaptured / S.fpsFile, 0)}× hidastus` : (S.fpsFile >= 100 ? `${f} fps aito` : `${f} fps`);
+  if (!S.fpsOk) b.textContent += ' · tarkista';
+  b.className = S.fpsOk ? 'ok' : 'warn';
+}
+function renderInfo() {
+  $('#frameNo').textContent = S.ready ? `Kuva ${S.curFrame} / ${maxFrame()}` : 'Kuva –';
+  $('#hudMarks').innerHTML = MK.filter(k => S.marks[k] && S.marks[k].f === S.curFrame).map(k => `<span style="background:${MCOL[k]}">${k.toUpperCase()}</span>`).join('');
+}
+function renderMarks() {
+  $$('.tb').forEach(b => { const m = S.marks[b.dataset.k]; b.classList.toggle('set', !!m); b.querySelector('.f').textContent = m ? 'kuva ' + m.f : ''; });
+  const r = calc(S.marks, factor()), part = (l, x) => `${l} <b class="${x < 0 ? 'negv' : ''}">${msTxt(x)}</b>`;
+  $('#vals').innerHTML = MK.some(k => S.marks[k]) ? `${part('Lähtö', r.lahto)} · ${part('Reaktio', r.reaktio)} · ${part('Tekn.', r.tekniikka)} ms` + (S.editingId ? ' <span style="color:var(--accent)">(muokkaus)</span>' : '') : '<span class="muted">Etsi ärsyke ja napauta T0</span>';
+  $('#bSave').disabled = !(S.marks.t0 && (S.marks.t1 || S.marks.t2));
+  $('#bSave').textContent = S.editingId ? 'Päivitä ✓' : 'Tallenna ✓';
+  scheduleRender();
+}
+const tl = $('#tl'), g = tl.getContext('2d');
+function drawTimeline() {
+  const dpr = devicePixelRatio || 1, W = tl.clientWidth, H = tl.clientHeight;
+  if (!W) return;
+  if (tl.width !== Math.round(W * dpr)) { tl.width = Math.round(W * dpr); tl.height = Math.round(H * dpr); }
+  g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+  if (!S.ready) return;
+  const X = t => t / S.duration * W;
+  g.fillStyle = 'rgba(154,153,143,.55)';
+  for (const r of data.reps) if (r.video === S.videoName && r.id !== S.editingId && r.t0) { const a = X(r.t0.t), b = X((r.t2 || r.t1 || r.t0).t); g.fillRect(a, H - 8, Math.max(3, b - a), 6); }
+  for (const k of MK) { const m = S.marks[k]; if (!m) continue; const x = X(m.t); g.fillStyle = MCOL[k]; g.fillRect(x - 2, 2, 4, H - 12); g.font = 'bold 11px system-ui'; g.fillText(k.toUpperCase(), Math.min(W - 18, x + 4), 13 + MK.indexOf(k) * 10); }
+  const cx = X(S.curMediaTime); g.fillStyle = '#fff'; g.fillRect(cx - 1, 0, 2, H);
+}
+
+/* ---------- aikajana: napautus = siirry, merkin läheltä = siirry merkkiin ---------- */
+let tlDrag = false;
+function tlFrame(e) { const r = tl.getBoundingClientRect(); return Math.floor(clamp((e.clientX - r.left) / r.width, 0, 1) * S.duration * S.fpsFile); }
+tl.addEventListener('pointerdown', e => {
+  if (!S.ready) return; try { tl.setPointerCapture(e.pointerId); } catch (_) { } tlDrag = true; hideCard();
+  const r = tl.getBoundingClientRect(), x = e.clientX - r.left;
+  const near = MK.filter(k => S.marks[k]).find(k => Math.abs(S.marks[k].t / S.duration * r.width - x) < 14);
+  gotoFrame(near ? S.marks[near].f : tlFrame(e));
+});
+tl.addEventListener('pointermove', e => { if (tlDrag) gotoFrame(tlFrame(e)); });
+tl.addEventListener('pointerup', () => tlDrag = false);
+tl.addEventListener('pointercancel', () => tlDrag = false);
+
+/* ---------- jog-nauha: veto 16 px = 1 kuva ---------- */
+const jog = $('#jog'); let jg = null;
+const JOG_PX = 16;
+jog.addEventListener('pointerdown', e => { if (!S.ready) return; try { jog.setPointerCapture(e.pointerId); } catch (_) { } jg = { x: e.clientX, base: NAV.busy ? NAV.target : S.curFrame, lastN: 0, bp: 0 }; jog.classList.add('active'); hideCard(); });
+jog.addEventListener('pointermove', e => {
+  if (!jg) return;
+  const dx = e.clientX - jg.x, n = Math.round(dx / JOG_PX);
+  jog.style.backgroundPosition = `${dx}px 0`;
+  if (n !== jg.lastN) { jg.lastN = n; gotoFrame(jg.base + n); if (Math.abs(n) % 5 === 0) vibrate(5); }
+});
+const jogEnd = () => { jg = null; jog.classList.remove('active'); };
+jog.addEventListener('pointerup', jogEnd); jog.addEventListener('pointercancel', jogEnd);
+
+/* ---------- video: nipistyszoom, siirto, tuplanapautus ---------- */
+const stage = $('#stage'), Z = { s: 1, x: 0, y: 0 }, ptrs = new Map();
+let pinch = null, lastTap = 0;
+function applyZoom() { v.style.transform = `translate(${Z.x}px,${Z.y}px) scale(${Z.s})`; $('#zoomTag').hidden = Z.s <= 1.01; $('#zoomTag').textContent = fiNum(Z.s, 1) + '×'; }
+function clampPan() { const w = stage.clientWidth, h = stage.clientHeight; Z.x = clamp(Z.x, w - w * Z.s, 0); Z.y = clamp(Z.y, h - h * Z.s, 0); }
+function resetZoom() { Z.s = 1; Z.x = 0; Z.y = 0; applyZoom(); }
+stage.addEventListener('pointerdown', e => {
+  if (e.target.closest('#errBox')) return;
+  try { stage.setPointerCapture(e.pointerId); } catch (_) { } ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), s: Z.s, zx: Z.x, zy: Z.y, cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 }; }
+  else if (ptrs.size === 1) {
+    const now = performance.now(); if (now - lastTap < 300) { resetZoom(); lastTap = 0; } else lastTap = now;
+    pinch = null;
+  }
+});
+stage.addEventListener('pointermove', e => {
+  if (!ptrs.has(e.pointerId)) return;
+  const prev = ptrs.get(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  const r = stage.getBoundingClientRect();
+  if (ptrs.size === 2 && pinch) {
+    const [a, b] = [...ptrs.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
+    const ns = clamp(pinch.s * d / pinch.d, 1, 12), k = ns / pinch.s, cx = pinch.cx - r.left, cy = pinch.cy - r.top;
+    const mx = (a.x + b.x) / 2 - pinch.cx, my = (a.y + b.y) / 2 - pinch.cy;
+    Z.s = ns; Z.x = cx - (cx - pinch.zx) * k + mx; Z.y = cy - (cy - pinch.zy) * k + my; clampPan(); applyZoom();
+  } else if (ptrs.size === 1 && Z.s > 1) { Z.x += e.clientX - prev.x; Z.y += e.clientY - prev.y; clampPan(); applyZoom(); }
+});
+const ptrEnd = e => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch = null; };
+stage.addEventListener('pointerup', ptrEnd); stage.addEventListener('pointercancel', ptrEnd);
+new ResizeObserver(() => { clampPan(); applyZoom(); scheduleRender(); }).observe(stage);
+
+/* =====================================================================
+   Tänään-näkymä
+   ===================================================================== */
+function renderHome() {
+  const day = $('#inDate').value || todayISO();
+  $('#todayTitle').textContent = (day === todayISO() ? 'Tämän päivän' : fmtDateFi(day)) + ' toistot';
+  const reps = data.reps.filter(r => r.pvm === day).sort((a, b) => (a.luotu || '').localeCompare(b.luotu || ''));
+  if (!reps.length) { $('#todayList').innerHTML = '<p class="muted">Ei vielä toistoja tältä päivältä. Aloita napauttamalla ＋ Video.</p>'; }
+  else {
+    const byP = new Map(); reps.forEach(r => { const k = r.pelaajaId; if (!byP.has(k)) byP.set(k, []); byP.get(k).push(r); });
+    $('#todayList').innerHTML = [...byP.entries()].map(([pid, rs]) => {
+      const ok = rs.filter(r => !r.hylatty);
+      return `<div class="pgrp"><div class="phead"><b>${esc(playerName(rs[0]))}</b><span>L ${msTxt(median(ok.map(r => r.lahtoaika_ms)))} · R ${msTxt(median(ok.map(r => r.reaktioaika_ms)))} ms · n=${ok.length}</span></div>
+        ${rs.map(r => `<button class="rep ${r.hylatty ? 'rej' : ''}" data-id="${r.id}"><span class="v num ${r.lahtoaika_ms < 0 ? 'negv' : ''}">L ${msTxt(r.lahtoaika_ms)}</span><span class="v num ${r.reaktioaika_ms < 0 ? 'negv' : ''}">R ${msTxt(r.reaktioaika_ms)}</span><span class="muted" style="font-size:13px">${esc(r.pesa || '')} ${esc(shortType(typeName(r)))}</span></button>`).join('')}</div>`;
+    }).join('');
+    $$('#todayList .rep').forEach(b => b.onclick = () => repMenu(b.dataset.id));
+  }
+  renderBackupBanner();
+}
+function repMenu(id) {
+  const r = data.reps.find(x => x.id === id); if (!r) return;
+  const canEdit = S.ready && r.video === S.videoName;
+  const sh = $('#sheet');
+  sh.innerHTML = `<div class="grip"></div><h3>${esc(playerName(r))} · ${esc(r.pesa || '')} · ${esc(shortType(typeName(r)))}</h3>
+    <p class="hint">Lähtö ${msTxt(r.lahtoaika_ms)} ms · reaktio ${msTxt(r.reaktioaika_ms)} ms · ${esc(r.video)}</p>
+    <div class="fld" style="margin-bottom:10px"><label for="inCom">Kommentti</label><input type="text" id="inCom" value="${esc(r.kommentti || '')}"></div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <button id="mEdit" ${canEdit ? '' : 'disabled'}>Muokkaa merkintöjä${canEdit ? '' : ' (avaa ensin sama video)'}</button>
+      <button id="mRej">${r.hylatty ? 'Palauta hyväksytyksi' : 'Merkitse hylätyksi / epävarmaksi'}</button>
+      <button id="mDel" style="color:var(--neg)">Poista toisto</button>
+      <button id="mClose" class="primary">Sulje</button>
+    </div>`;
+  const saveCom = async () => { const c = $('#inCom').value.trim(); if (c !== (r.kommentti || '')) { r.kommentti = c; r.muokattu = new Date().toISOString(); await DB.put('reps', r); } };
+  $('#mClose').onclick = async () => { await saveCom(); closeSheet(); renderHome(); };
+  $('#mRej').onclick = async () => { await saveCom(); r.hylatty = !r.hylatty; r.muokattu = new Date().toISOString(); await DB.put('reps', r); closeSheet(); renderHome(); };
+  $('#mDel').onclick = async () => { if (!confirm('Poistetaanko toisto pysyvästi?')) return; await DB.del('reps', r.id); data.reps = data.reps.filter(x => x.id !== r.id); closeSheet(); renderHome(); };
+  $('#mEdit').onclick = async () => {
+    await saveCom(); closeSheet();
+    S.editingId = r.id; S.marks = { t0: r.t0 ?? null, t1: r.t1 ?? null, t2: r.t2 ?? null }; S.undo = [];
+    setSetting('lastPlayer', r.pelaajaId); setSetting('lastType', r.tilanneId); setSetting('lastBase', r.pesa || '');
+    showScreen('mark'); renderAll(); if (r.t0) gotoFrame(r.t0.f);
+  };
+  showSheet();
+}
+function renderBackupBanner() {
+  const last = data.settings.lastExport || '', since = data.reps.filter(r => (r.muokattu || r.luotu || '') > last).length;
+  const days = last ? (Date.now() - Date.parse(last)) / 864e5 : Infinity;
+  const b = $('#backupBanner');
+  if (since > 0 && (since >= 20 || days > 3 || !last)) {
+    b.hidden = false;
+    b.innerHTML = `<b>${since} toistoa ilman varmuuskopiota.</b> Jaa varmuuskopio esim. Driveen, jotta tiedot eivät katoa puhelimen mukana.<br><button id="bBackupNow" class="primary" style="width:100%">Jaa varmuuskopio nyt</button>`;
+    $('#bBackupNow').onclick = shareJSON;
+  } else b.hidden = true;
+}
+
+/* =====================================================================
+   Vienti ja tuonti (muoto täsmälleen sama kuin läppäriversiossa)
+   ===================================================================== */
+const CSV_COLS = ['toisto_id', 'pvm', 'harjoitus', 'pelaaja', 'tilanne', 'video', 'fps_kuvattu', 't0_ms', 't1_ms', 't2_ms', 'reaktioaika_ms', 'lahtoaika_ms', 'tekniikka_ms', 'tarkkuus_ms', 'hylatty', 'merkitsija', 'kommentti', 'pesa'];
+function csvNum(x, dec) { if (x == null || !isFinite(x)) return ''; let s = (Math.round(x * 10 ** dec) / 10 ** dec).toFixed(dec); if (s.includes('.')) s = s.replace(/0+$/, '').replace(/\.$/, ''); return s.replace('.', ','); }
+function csvFixed(x, dec = 1) { return x == null || !isFinite(x) ? '' : (Math.round(x * 10 ** dec) / 10 ** dec).toFixed(dec).replace('.', ','); }
+function csvCell(s) { s = String(s ?? ''); return /[;"\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+function buildCSV(reps) {
+  const lines = [CSV_COLS.join(';')];
+  for (const r of reps) lines.push([r.id, r.pvm, r.harjoitus, playerName(r), typeName(r), r.video, csvNum(r.fps_kuvattu, 3),
+    csvFixed(r.t0_ms), csvFixed(r.t1_ms), csvFixed(r.t2_ms), csvFixed(r.reaktioaika_ms), csvFixed(r.lahtoaika_ms), csvFixed(r.tekniikka_ms), csvFixed(r.tarkkuus_ms),
+    r.hylatty ? 1 : 0, r.merkitsija, r.kommentti, r.pesa || ''].map(csvCell).join(';'));
+  return '﻿' + lines.join('\r\n') + '\r\n';
+}
+function buildJSON() {
+  return JSON.stringify({ sovellus: 'reaktioaikalaskuri', versio: 1, viety: new Date().toISOString(), merkitsija: data.settings.merkitsija || '', pelaajat: data.players, tilanteet: data.types, videot: [...data.videos.values()], toistot: data.reps }, null, 1);
+}
+async function importJSON(text) {
+  let o; try { o = JSON.parse(text); } catch (e) { throw new Error('Tiedosto ei ole kelvollista JSONia.'); }
+  if (!o || !Array.isArray(o.toistot)) throw new Error('Tiedosto ei ole reaktioaikalaskurin varmuuskopio.');
+  const pMap = new Map(), tMap = new Map(), newP = [], newT = [];
+  for (const t of o.tilanteet || []) { const ex = typeById(t.id) || data.types.find(x => x.nimi.toLowerCase() === String(t.nimi).toLowerCase()); if (ex) tMap.set(t.id, ex.id); else { data.types.push(t); newT.push(t); tMap.set(t.id, t.id); } }
+  for (const p of o.pelaajat || []) { const ex = playerById(p.id) || data.players.find(x => x.nimi.toLowerCase() === String(p.nimi).toLowerCase()); if (ex) pMap.set(p.id, ex.id); else { data.players.push(p); newP.push(p); pMap.set(p.id, p.id); } }
+  let added = 0, updated = 0, dup = 0; const put = [];
+  for (const r0 of o.toistot) {
+    if (!r0 || !r0.id) continue; const r = { ...r0 };
+    if (r.pelaajaId && pMap.has(r.pelaajaId)) r.pelaajaId = pMap.get(r.pelaajaId); else if (!playerById(r.pelaajaId)) { const p = await addPlayer(r.pelaaja || 'Tuntematon'); r.pelaajaId = p.id; }
+    if (r.tilanneId && tMap.has(r.tilanneId)) r.tilanneId = tMap.get(r.tilanneId);
+    const ex = data.reps.find(x => x.id === r.id);
+    if (!ex) { data.reps.push(r); put.push(r); added++; } else if ((r.muokattu || '') > (ex.muokattu || '')) { Object.assign(ex, r); put.push(ex); updated++; } else dup++;
+  }
+  for (const vv of o.videot || []) if (!data.videos.has(vv.key)) { data.videos.set(vv.key, vv); await DB.put('videos', vv); }
+  await DB.putMany('types', newT); await DB.putMany('players', newP); await DB.putMany('reps', put);
+  return { added, updated, dup, players: newP.length };
+}
+async function shareFile(name, text, mime) {
+  const stamp = new Date().toISOString();
+  for (const type of [mime, 'text/plain']) {
+    try {
+      const f = new File([text], name, { type });
+      if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: name }); return stamp; }
+    } catch (e) { if (e.name === 'AbortError') return null; }
+  }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: mime })); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  toast('Tiedosto tallennettu latauksiin.', 'ok'); return stamp;
+}
+async function shareJSON() {
+  if (!data.reps.length) { toast('Ei vietävää.'); return; }
+  const who = (data.settings.merkitsija || 'puhelin').replace(/[^\wåäöÅÄÖ-]+/g, '_');
+  const done = await shareFile(`reaktioajat_${who}_${todayISO()}.json`, buildJSON(), 'application/json');
+  if (done) { setSetting('lastExport', done); renderBackupBanner(); }
+}
+async function shareCSV() {
+  if (!data.reps.length) { toast('Ei vietävää.'); return; }
+  const reps = [...data.reps].sort((a, b) => a.pvm.localeCompare(b.pvm) || (a.luotu || '').localeCompare(b.luotu || ''));
+  await shareFile(`reaktioajat_${todayISO()}.csv`, buildCSV(reps), 'text/csv');
+}
+
+/* =====================================================================
+   Näkymät, historia (Android Takaisin), näytön pito päällä
+   ===================================================================== */
+let SCREEN = 'home', wakeLock = null;
+function showScreen(name, fromPop) {
+  if (name === SCREEN) return;
+  SCREEN = name;
+  $('#scrHome').classList.toggle('on', name === 'home');
+  $('#scrMark').classList.toggle('on', name === 'mark');
+  if (name === 'mark') { if (!fromPop) history.pushState({ s: 'mark' }, ''); requestWake(); renderAll(); }
+  else { if (!v.paused) v.pause(); hideCard(); releaseWake(); renderHome(); }
+}
+function leaveMark() {
+  if (MK.some(k => S.marks[k]) && !confirm('Merkinnät ovat tallentamatta. Poistutaanko?')) return false;
+  if (S.editingId) { S.editingId = null; S.marks = { t0: null, t1: null, t2: null }; }
+  return true;
+}
+window.addEventListener('popstate', () => {
+  if (!$('#sheet').hidden) { closeSheet(); history.pushState({ s: 'mark' }, ''); return; }
+  if (SCREEN === 'mark') { if (leaveMark()) showScreen('home', true); else history.pushState({ s: 'mark' }, ''); }
+});
+$('#bBack').onclick = () => { if (leaveMark()) history.back(); };
+async function requestWake() { try { if ('wakeLock' in navigator && !wakeLock) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => wakeLock = null); } } catch (e) { } }
+function releaseWake() { try { wakeLock && wakeLock.release(); } catch (e) { } wakeLock = null; }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && SCREEN === 'mark') requestWake(); });
+
+/* ---------- tapahtumat ---------- */
+$('#fileInput').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) loadFile(f); };
+$('#bResume').onclick = () => showScreen('mark');
+$('#ctxBtn').onclick = openSheet;
+$('#fpsBadge').onclick = openFpsSheet;
+$$('.tb').forEach(b => b.onclick = () => setMark(b.dataset.k));
+$$('[data-step]').forEach(b => b.onclick = () => { hideCard(); stepFrames(+b.dataset.step); });
+$('#bPlay').onclick = () => { if (!S.ready) return; hideCard(); if (v.paused) { v.playbackRate = 0.25; v.play().catch(() => { }); } else v.pause(); };
+v.addEventListener('play', () => $('#bPlay').textContent = '⏸');
+v.addEventListener('pause', () => { $('#bPlay').textContent = '▶'; NAV.target = S.curFrame; });
+$('#bUndo').onclick = undo;
+$('#bSave').onclick = saveRep;
+$('#bShareJson').onclick = shareJSON;
+$('#bShareCsv').onclick = shareCSV;
+$('#jsonInput').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try { const r = await importJSON(await f.text()); toast(`Tuotu ${r.added} uutta, ${r.updated} päivitetty, ${r.dup} duplikaattia ohitettu.`, 'ok', 5000); renderHome(); }
+  catch (err) { toast('Tuonti epäonnistui: ' + err.message, 'err', 6000); }
+};
+$('#inDate').onchange = renderHome;
+$('#inSession').onchange = () => setSetting('lastSession', $('#inSession').value.trim());
+$('#inMarker').onchange = () => setSetting('merkitsija', $('#inMarker').value.trim());
+// näppäimistö (tabletti + näppäimistö, automaattitestit)
+document.addEventListener('keydown', e => {
+  if (SCREEN !== 'mark' || e.target.tagName === 'INPUT' || !$('#sheet').hidden) return;
+  const k = e.key; let h = true;
+  if (k === 'ArrowRight') stepFrames(e.shiftKey ? 10 : 1); else if (k === 'ArrowLeft') stepFrames(e.shiftKey ? -10 : -1);
+  else if (k === 'q' || k === 'Q') setMark('t0'); else if (k === 'w' || k === 'W') setMark('t1'); else if (k === 'e' || k === 'E') setMark('t2');
+  else if (k === 'Enter') { if (!$('#bSave').disabled) saveRep(); } else if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'z') undo(); else h = false;
+  if (h) e.preventDefault();
+});
+let deferredInstall = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredInstall = e; $('#bInstall').hidden = false; });
+$('#bInstall').onclick = async () => { if (!deferredInstall) return; deferredInstall.prompt(); await deferredInstall.userChoice.catch(() => { }); deferredInstall = null; $('#bInstall').hidden = true; };
+window.addEventListener('beforeunload', e => { if (MK.some(k => S.marks[k])) { e.preventDefault(); e.returnValue = ''; } });
+
+/* ---------- käynnistys ---------- */
+(async function init() {
+  await loadAll();
+  $('#inDate').value = todayISO();
+  $('#inSession').value = data.settings.lastSession || '';
+  $('#inMarker').value = data.settings.merkitsija || '';
+  if (isIOS && !standalone) $('#iosBanner').hidden = false;
+  history.replaceState({ s: 'home' }, '');
+  renderHome(); renderCtx();
+  let persisted = false;
+  try { if (navigator.storage?.persist) persisted = await navigator.storage.persisted() || await navigator.storage.persist(); } catch (e) { }
+  $('#persistInfo').innerHTML = persisted ? '✔ Selain on luvannut säilyttää tiedot pysyvästi.' : '⚠ Selain ei luvannut pysyvää tallennusta – jaa varmuuskopio säännöllisesti. (Kotinäytölle asennettuna tämä yleensä korjaantuu.)';
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !TEST_DB) navigator.serviceWorker.register('sw.js').catch(() => { });
+  if (!hasRVFC) toast('Selain on vanha: kuva-ajat ovat arvioita. Päivitä Chrome / iOS.', 'warn', 7000);
+})();
+
+/* Testirajapinta */
+window.MA = { S, data, DB, loadFile, gotoFrame, buildCSV, buildJSON, importJSON, addPlayer, choosePlayer, setCap, setSetting,
+  idle: async () => { while (NAV.busy) await NAV.p; await new Promise(r => setTimeout(r, 30)); } };
+</script>
+</body>
+</html>
