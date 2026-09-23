@@ -187,7 +187,7 @@ async function runTests() {
   const res = await RA.importJSON(MA.buildJSON());
   check(res.added === 0 && res.dup === MA.data.reps.length, 'mobiilin JSON tuotuna läppäriin: ei duplikaatteja');
 
-  document.getElementById('summary').innerHTML = fail ? `<span class="fail">${fail} epäonnistui</span>, ${pass} ok` : `<span class="ok">Kaikki ${pass} tarkistusta ok</span>`;
+  document.getElementById('summary').innerHTML = fail ? `<span class="fail">${fail} epäonnistui</span>, ${pass} ok` : `<span class="ok">Kaikki ${pass} tarkistusta ok</span>` + ' · Testiajossa on vain 5 toistoa yhdeltä päivältä – kaaviot saat näkyviin napilla 📊 Demodata + analyysi.';
   window.TEST_RESULT = { pass, fail };
 }
 /* ---------- Demodata analyysin kokeiluun ---------- */
