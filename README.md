@@ -27,6 +27,16 @@ Työkalusta on kaksi versiota, jotka käyttävät samaa tallennusmuotoa:
 
 **Tänään-näkymä** näyttää päivän toistot pelaajittain mediaaneineen. Toiston napautus avaa valikon: muokkaa, hylkää/palauta, kommentoi tai poista.
 
+### Analyysi puhelimessa
+Etusivun **📊 Analyysi ja kaaviot** näyttää kaikki puhelimen tiedot, myös muilta valmentajilta tuodut:
+- **Mittari:** lähtöaika, reaktioaika tai tekniikka
+- **Suodattimet** (⚙-rivi): aikaväli, ärsyke, pesä, pelaajat ja hylätyt mukaan tai pois. Pelaajavertailu on reilu vain, kun valittuna on yksi ärsyke ja yksi pesä.
+- **Pelaajavertailu:** nopein ensin. Iso luku on mediaani, lisäksi n, paras, keskiarvo ja hajonta. Alle 5 toiston otoksista näytetään varoitus. Pisteet ovat yksittäisiä toistoja samalla asteikolla.
+- **Kehitys ajan yli** (päivän mediaani pelaajittain) ja **reaktio vs. tekniikka**
+- Napauta pistettä, niin näet toiston tiedot.
+
+Läppäriversiossa on sama analyysi isommalla näytöllä, ja sieltä saa myös CSV:n Power BI:hin.
+
 ### Tietojen siirto läppärille
 - Puhelimessa: **Jaa varmuuskopio** → valitse Drive (tai sähköposti). Sovellus muistuttaa, kun varmuuskopio on vanha.
 - Läppärillä: `reaktioaika.html` → **Asetukset → Tuo / yhdistä JSON**. Duplikaatteja ei synny (UUID), joten saman tiedoston voi tuoda uudelleen.

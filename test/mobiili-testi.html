@@ -125,6 +125,24 @@ async function runTests() {
   const csv = MA.buildCSV(MA.data.reps);
   check(csv.split('\r\n')[0] === '﻿toisto_id;pvm;harjoitus;pelaaja;tilanne;video;fps_kuvattu;t0_ms;t1_ms;t2_ms;reaktioaika_ms;lahtoaika_ms;tekniikka_ms;tarkkuus_ms;hylatty;merkitsija;kommentti;pesa', 'CSV-otsikko sama kuin läppäriversiossa');
 
+  log('Analyysi-näkymä', 'head');
+  await tap('#bStats'); await sleep(100);
+  check(D.getElementById('scrStats').classList.contains('on'), 'Analyysi avautui');
+  await tap('#statsFilters [data-d="0"]'); await tap('#statsFilters [data-t=""]'); await tap('#statsFilters [data-b=""]');
+  const rowsEl = [...D.querySelectorAll('#statsBody .prow')];
+  const byP = new Map(); MA.data.reps.filter(r => !r.hylatty).forEach(r => { if (!byP.has(r.pelaajaId)) byP.set(r.pelaajaId, []); byP.get(r.pelaajaId).push(r.lahtoaika_ms); });
+  check(rowsEl.length === byP.size, `pelaajavertailussa ${rowsEl.length} pelaajaa (odotettu ${byP.size})`);
+  const okMed = rowsEl.every(el => { const exp = MA.statsOf(byP.get(el.dataset.pid)).med; return el.querySelector('.md').textContent.replace('−', '-').replace(/\s/g, '') === Math.round(exp).toString(); });
+  check(okMed, 'jokaisen pelaajan mediaani täsmää laskettuun');
+  const meds = rowsEl.map(el => MA.statsOf(byP.get(el.dataset.pid)).med);
+  check(meds.every((m, i) => i === 0 || meds[i - 1] <= m), 'järjestys nopeimmasta hitaimpaan');
+  const dot = D.querySelector('#statsBody .prow circle'); dot.dispatchEvent(new W_.MouseEvent('click', { bubbles: true }));
+  check(/Lähtö/.test(D.querySelector('#cmpCard [data-tipline]').textContent), 'pisteen napautus näyttää toiston tiedot');
+  await tap('#statsFilters [data-m="reaktioaika_ms"]');
+  check(/Reaktioaika/.test(D.querySelector('#cmpCard h2').textContent), 'mittarin vaihto reaktioaikaan');
+  await tap('#bStatsBack'); await sleep(200);
+  check(D.getElementById('scrHome').classList.contains('on'), 'takaisin etusivulle');
+
   log('Yhteensopivuus läppäriversion kanssa', 'head');
   const desk = document.getElementById('desk');
   desk.src = '../reaktioaika.html?db=testi&t=' + Date.now(); await new Promise(r => desk.onload = r); await sleep(800);

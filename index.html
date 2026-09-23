@@ -155,6 +155,33 @@ details summary{min-height:48px;display:flex;align-items:center;color:var(--text
 .fpsopts button{min-height:56px;background:var(--s2);border:2px solid var(--line)}
 .fpsopts button.on{background:var(--accent);border-color:var(--accent)}
 .hint{font-size:14px;color:var(--text2);margin:6px 0}
+/* ---------- Analyysi ---------- */
+#scrStats{flex-direction:column;overflow-y:auto;padding:calc(8px + var(--safe-t)) 12px calc(24px + var(--safe-b));gap:10px}
+.stop{display:flex;gap:8px;align-items:center;position:sticky;top:calc(-8px - var(--safe-t));background:var(--bg);z-index:2;padding:6px 0}
+.stop h1{font-size:20px;margin:0;flex:1}
+.stop .back{width:48px;padding:0;font-size:24px;flex:none}
+.frow{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+.frow::-webkit-scrollbar{display:none}
+.frow button{flex:none;min-height:44px;padding:0 14px;border-radius:22px;background:var(--s2);border:2px solid var(--line);font-size:15px;font-weight:600}
+.frow button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.flabel{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:6px 0 4px}
+.prow{padding:8px 0;border-top:1px solid var(--line)}
+.prow:first-of-type{border-top:0}
+.prow .top{display:flex;align-items:baseline;gap:8px}
+.prow .nm{flex:1;font-weight:700;font-size:16px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prow .md{font-size:26px;font-weight:800}
+.prow .md.neg{color:var(--neg)}
+.prow .sub{font-size:13px;color:var(--text2);margin-top:2px}
+.prow svg{display:block;width:100%;height:26px;margin-top:4px}
+.badge{display:inline-block;border-radius:6px;padding:0 6px;font-size:12px;font-weight:700}
+.badge.warn{background:rgba(255,194,51,.18);color:var(--warn)}
+.badge.neg{background:rgba(255,92,92,.18);color:var(--neg)}
+.chart svg{display:block;width:100%}
+.chart text{fill:var(--text2);font-size:11px;font-family:system-ui,sans-serif}
+.tipline{min-height:20px;font-size:14px;color:var(--text);background:var(--s2);border-radius:10px;padding:6px 10px;margin-top:6px;white-space:pre-line}
+.legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:13px;color:var(--text2);margin:4px 0}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+#bStats{min-height:56px;font-size:18px}
 #errBox{position:absolute;inset:0;overflow:auto;background:rgba(0,0,0,.95);padding:14px;font-size:15px}
 #errBox h2{color:var(--neg);font-size:18px;margin:0 0 6px}
 #errBox code{display:block;background:var(--s2);padding:8px;border-radius:8px;word-break:break-all;font-size:12px;user-select:all}
@@ -173,6 +200,7 @@ details summary{min-height:48px;display:flex;align-items:center;color:var(--text
   <label class="big primary" id="bVideo" style="display:flex;align-items:center;justify-content:center;font-weight:800;cursor:pointer">＋ Video
     <input type="file" id="fileInput" accept="video/*" hidden>
   </label>
+  <button id="bStats">📊 Analyysi ja kaaviot</button>
   <button id="bResume" hidden>Jatka merkintää: <span id="resumeName"></span></button>
   <div id="backupBanner" class="banner warn" hidden></div>
   <div class="card">
@@ -236,6 +264,13 @@ details summary{min-height:48px;display:flex;align-items:center;color:var(--text
       <button id="bSave" disabled>Tallenna ✓</button>
     </div>
   </div>
+</section>
+
+<!-- ================= ANALYYSI ================= -->
+<section class="screen" id="scrStats">
+  <div class="stop"><button class="back" id="bStatsBack" aria-label="Takaisin">‹</button><h1>Analyysi</h1></div>
+  <div id="statsFilters"></div>
+  <div id="statsBody"></div>
 </section>
 
 <div class="backdrop" id="backdrop" hidden></div>
@@ -791,6 +826,162 @@ function renderBackupBanner() {
 }
 
 /* =====================================================================
+   Analyysi: suodattimet, pelaajavertailu, kehitys, reaktio vs. tekniikka
+   ===================================================================== */
+const SERIES = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767'];
+const METR = { lahtoaika_ms: 'Lähtöaika', reaktioaika_ms: 'Reaktioaika', tekniikka_ms: 'Tekniikka' };
+const AF = { days: 30, tid: null, pesa: '', pids: new Set(), rej: false, metric: 'lahtoaika_ms', open: false };
+function isoDaysAgo(n) { const d = new Date(); d.setDate(d.getDate() - n); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); }
+function statsOf(vals) {
+  const a = vals.filter(x => x != null && isFinite(x)).sort((x, y) => x - y), n = a.length;
+  if (!n) return { n: 0 };
+  const mean = a.reduce((s, x) => s + x, 0) / n;
+  return { n, med: median(a), mean, sd: n > 1 ? Math.sqrt(a.reduce((s, x) => s + (x - mean) ** 2, 0) / (n - 1)) : null, min: a[0], max: a[n - 1], neg: a.filter(x => x < 0).length };
+}
+function afReps(withRej) {
+  const from = AF.days ? isoDaysAgo(AF.days - 1) : '';
+  return data.reps.filter(r => (!from || r.pvm >= from) && (!AF.tid || r.tilanneId === AF.tid) && (!AF.pesa || (r.pesa || '') === AF.pesa)
+    && (!AF.pids.size || AF.pids.has(r.pelaajaId)) && (withRej || !r.hylatty));
+}
+function niceTicks(lo, hi, count = 5) {
+  const span = hi - lo || 1, raw = span / count, mag = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(x => span / x <= count) || mag * 10;
+  const t = []; for (let x = Math.floor(lo / step + 1e-9) * step; x < hi + step - 1e-9; x += step) t.push(Math.round(x * 1e6) / 1e6 + 0);
+  return t;
+}
+// Väri seuraa pelaajaa (luontijärjestys), ei sijoitusta. Enintään 8 väriä.
+function playerColors(pids) {
+  const all = [...data.players].sort((a, b) => (a.luotu || '').localeCompare(b.luotu || ''));
+  const pool = all.length <= 8 ? all.map(p => p.id) : all.filter(p => pids.includes(p.id)).map(p => p.id);
+  const m = new Map(); pool.forEach((id, i) => { if (i < 8) m.set(id, SERIES[i]); }); return m;
+}
+const tipOf = r => `${playerName(r)} · ${fmtDateFi(r.pvm)} · ${r.pesa || '–'} · ${shortType(typeName(r))}\nLähtö ${msTxt(r.lahtoaika_ms)} ms · reaktio ${msTxt(r.reaktioaika_ms)} ms · tekniikka ${msTxt(r.tekniikka_ms)} ms${r.hylatty ? ' · hylätty' : ''}${r.kommentti ? '\n“' + r.kommentti + '”' : ''}`;
+const tipA = t => `data-tip="${esc(t)}"`;
+
+function renderStatsFilters() {
+  if (AF.tid === null) AF.tid = data.settings.lastType || '';
+  const chip = (attr, val, on, label) => `<button ${attr}="${esc(val)}" class="${on ? 'on' : ''}">${esc(label)}</button>`;
+  const players = [...data.players].sort((a, b) => a.nimi.localeCompare(b.nimi, 'fi'));
+  const tName = AF.tid ? shortType(typeById(AF.tid)?.nimi || '?') : 'kaikki ärsykkeet';
+  const dName = { 1: 'tänään', 7: '7 pv', 30: '30 pv', 0: 'kaikki päivät' }[AF.days];
+  const pName = AF.pids.size ? AF.pids.size + ' pelaajaa' : 'kaikki pelaajat';
+  const summary = `${esc(tName)} · ${esc(AF.pesa || 'kaikki pesät')} · ${dName} · ${pName}${AF.rej ? ' · hylätyt mukana' : ''}`;
+  $('#statsFilters').innerHTML = `
+    <div class="frow">${Object.entries(METR).map(([k, l]) => chip('data-m', k, AF.metric === k, l)).join('')}</div>
+    <button id="bFilt" style="width:100%;margin-top:8px;justify-content:space-between;display:flex;align-items:center;background:var(--s2);font-weight:600;text-align:left"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">⚙ ${summary}</span><span>${AF.open ? '▴' : '▾'}</span></button>
+    <div id="filtPanel" ${AF.open ? '' : 'hidden'}>
+    <div class="flabel">Aikaväli</div>
+    <div class="frow">${[[1, 'Tänään'], [7, '7 pv'], [30, '30 pv'], [0, 'Kaikki']].map(([d, l]) => chip('data-d', d, AF.days === d, l)).join('')}</div>
+    <div class="flabel">Ärsyke</div>
+    <div class="frow">${chip('data-t', '', !AF.tid, 'Kaikki')}${typesSorted().map(t => chip('data-t', t.id, AF.tid === t.id, shortType(t.nimi))).join('')}</div>
+    <div class="flabel">Tilanne (pesä)</div>
+    <div class="frow">${chip('data-b', '', !AF.pesa, 'Kaikki')}${PESAT.map(p => chip('data-b', p, AF.pesa === p, p)).join('')}</div>
+    <div class="flabel">Pelaajat</div>
+    <div class="frow">${chip('data-p', '', !AF.pids.size, 'Kaikki')}${players.map(p => chip('data-p', p.id, AF.pids.has(p.id), p.nimi)).join('')}</div>
+    <div class="frow" style="margin-top:6px">${chip('data-rej', '1', AF.rej, AF.rej ? '✓ Hylätyt mukana' : 'Hylätyt pois')}</div></div>`;
+  $('#bFilt').onclick = () => { AF.open = !AF.open; renderStats(); };
+  const F = $('#statsFilters');
+  F.querySelectorAll('[data-m]').forEach(b => b.onclick = () => { AF.metric = b.dataset.m; renderStats(); });
+  F.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { AF.days = +b.dataset.d; renderStats(); });
+  F.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { AF.tid = b.dataset.t; renderStats(); });
+  F.querySelectorAll('[data-b]').forEach(b => b.onclick = () => { AF.pesa = b.dataset.b; renderStats(); });
+  F.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { const id = b.dataset.p; if (!id) AF.pids.clear(); else AF.pids.has(id) ? AF.pids.delete(id) : AF.pids.add(id); renderStats(); });
+  F.querySelector('[data-rej]').onclick = () => { AF.rej = !AF.rej; renderStats(); };
+}
+function renderStats() {
+  const sx = $('#scrStats').scrollTop;
+  renderStatsFilters();
+  const key = AF.metric, all = afReps(true), reps = afReps(AF.rej);
+  const body = $('#statsBody');
+  if (!all.length) { body.innerHTML = '<div class="card"><p class="muted">Ei toistoja valituilla suodattimilla. Kokeile laajempaa aikaväliä tai "Kaikki".</p></div>'; return; }
+  const byP = new Map();
+  for (const r of all) {
+    if (!byP.has(r.pelaajaId)) byP.set(r.pelaajaId, { pid: r.pelaajaId, name: playerName(r), reps: [], rej: 0 });
+    const g = byP.get(r.pelaajaId); if (r.hylatty) g.rej++; if (!r.hylatty || AF.rej) g.reps.push(r);
+  }
+  const rows = [...byP.values()].map(g => ({ ...g, st: statsOf(g.reps.map(r => r[key])) })).filter(g => g.st.n).sort((a, b) => a.st.med - b.st.med);
+  const vals = rows.flatMap(g => g.reps.map(r => r[key]).filter(x => x != null));
+  const warnMix = !AF.tid || !AF.pesa;
+  let html = `<div class="card" id="cmpCard"><h2>${METR[key]} – pelaajavertailu</h2>
+    <div class="hint">Iso luku = mediaani (ms). Sininen viiva = mediaani, pisteet = yksittäiset toistot, kaikki samalla asteikolla. Pienin on nopein.${warnMix ? ' <span style="color:var(--warn)">Valitse yksi ärsyke ja pesä, jotta pelaajat ovat vertailukelpoisia.</span>' : ''}</div>`;
+  if (!rows.length) html += `<p class="muted">Ei arvoja tälle mittarille${key !== 'lahtoaika_ms' ? ' (T1 puuttuu toistoista)' : ''}.</p>`;
+  else {
+    // Asteikko datan vaihteluvälille (nolla mukaan vain, jos on negatiivisia arvoja), jotta pienet erot näkyvät
+    let lo = Math.min(...vals), hi = Math.max(...vals); if (lo < 0) lo = Math.min(lo, 0);
+    const pad = Math.max(5, (hi - lo) * 0.06); lo -= pad; hi += pad;
+    const X = x => 2 + (x - lo) / (hi - lo) * 96;   // prosentteina rivin leveydestä
+    html += rows.map(g => {
+      const st = g.st;
+      const dots = g.reps.filter(r => r[key] != null).map(r => `<circle cx="${X(r[key])}%" cy="13" r="4.5" fill="${r[key] < 0 ? 'var(--neg)' : '#f4f3ee'}" fill-opacity=".75" stroke="#111" stroke-width="1.5" ${tipA(tipOf(r))}/>`).join('');
+      return `<div class="prow" data-pid="${g.pid}"><div class="top"><span class="nm">${esc(g.name)}</span><span class="md num ${st.med < 0 ? 'neg' : ''}">${msTxt(st.med)}</span></div>
+        <div class="sub num">n=${st.n} · paras ${msTxt(st.min)} · ka ${msTxt(st.mean)}${st.sd != null ? ' · ±' + fiNum(st.sd) : ''}${g.rej ? ` · hylätty ${g.rej}` : ''}
+          ${st.n < 5 ? '<span class="badge warn">⚠ pieni otos</span>' : ''} ${st.neg ? `<span class="badge neg">${st.neg}× ennakointi</span>` : ''}</div>
+        <svg role="img" aria-label="${esc(g.name)} toistot">${lo < 0 ? `<line x1="${X(0)}%" x2="${X(0)}%" y1="2" y2="24" stroke="#777" stroke-dasharray="2 2"/>` : ''}
+          <line x1="2%" x2="98%" y1="13" y2="13" stroke="#2a2a28" stroke-width="2"/>
+          <rect x="${X(st.min)}%" y="10" width="${Math.max(0.6, X(st.max) - X(st.min))}%" height="6" rx="3" fill="var(--accent)" opacity=".35"/>
+          <line x1="${X(st.med)}%" x2="${X(st.med)}%" y1="3" y2="23" stroke="var(--accent)" stroke-width="3"/>${dots}</svg></div>`;
+    }).join('');
+    html += `<div class="num muted" style="display:flex;justify-content:space-between;font-size:11px;margin-top:2px"><span>${fiNum(lo)} ms</span><span>${fiNum(hi)} ms</span></div>`;
+  }
+  html += `<div class="tipline" data-tipline>Napauta pistettä nähdäksesi toiston tiedot.</div></div>`;
+  html += `<div class="card chart" id="chTrend"></div><div class="card chart" id="chScatter"></div>`;
+  body.innerHTML = html;
+  drawTrendM($('#chTrend'), reps, key);
+  drawScatterM($('#chScatter'), reps);
+  body.querySelectorAll('.card').forEach(c => c.addEventListener('click', e => {
+    const t = e.target.closest('[data-tip]'), l = c.querySelector('[data-tipline]');
+    if (t && l) l.textContent = t.getAttribute('data-tip');
+  }));
+  $('#scrStats').scrollTop = sx;
+}
+function drawTrendM(el, reps, key) {
+  el.innerHTML = `<h2>Kehitys ajan yli</h2><div class="hint">${METR[key]}: päivän mediaani (viiva) ja toistot (pienet pisteet).</div>`;
+  const rs = reps.filter(r => r[key] != null), dates = [...new Set(rs.map(r => r.pvm))].sort();
+  if (dates.length < 2) { el.insertAdjacentHTML('beforeend', '<p class="muted">Kehitys näkyy, kun toistoja on vähintään kahdelta päivältä.</p>'); return; }
+  const pids = [...new Set(rs.map(r => r.pelaajaId))], cm = playerColors(pids), shown = pids.filter(id => cm.has(id));
+  el.insertAdjacentHTML('beforeend', `<div class="legend">${shown.map(id => `<span><i style="background:${cm.get(id)}"></i>${esc(playerById(id)?.nimi ?? '?')}</span>`).join('')}${pids.length > shown.length ? `<span class="muted">+${pids.length - shown.length} ei näytetä – rajaa pelaajia (max 8)</span>` : ''}</div>`);
+  const W = Math.max(280, el.clientWidth - 24), H = 210, L = 40, R = 10, T = 8, B = 22;
+  const d0 = Date.parse(dates[0]), d1 = Date.parse(dates[dates.length - 1]);
+  const X = d => L + 8 + (Date.parse(d) - d0) / (d1 - d0 || 1) * (W - L - R - 16);
+  const vv = rs.filter(r => cm.has(r.pelaajaId)).map(r => r[key]);
+  let lo = Math.min(...vv), hi = Math.max(...vv); if (lo < 0) lo = Math.min(lo, 0); if (hi - lo < 20) { lo -= 10; hi += 10; }
+  const tk = niceTicks(lo, hi, 4); lo = Math.min(lo, tk[0]); hi = Math.max(hi, tk[tk.length - 1]);
+  const Y = x => T + 4 + (1 - (x - lo) / (hi - lo)) * (H - T - B - 8);
+  let s = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="Kehitys">`;
+  s += tk.map(t => `<line x1="${L}" x2="${W - R}" y1="${Y(t)}" y2="${Y(t)}" stroke="#333"/><text x="${L - 5}" y="${Y(t) + 4}" text-anchor="end">${fiNum(t)}</text>`).join('');
+  const every = Math.ceil(dates.length / Math.max(2, Math.floor((W - L) / 56)));
+  dates.forEach((d, i) => { if (i % every === 0 || i === dates.length - 1) s += `<text x="${X(d)}" y="${H - 6}" text-anchor="middle">${fmtDateFi(d).replace(/\d{4}$/, '')}</text>`; });
+  for (const pid of shown) {
+    const c = cm.get(pid), mine = rs.filter(r => r.pelaajaId === pid);
+    const pts = [...new Set(mine.map(r => r.pvm))].sort().map(d => ({ d, m: median(mine.filter(r => r.pvm === d).map(r => r[key])), n: mine.filter(r => r.pvm === d).length }));
+    s += mine.map(r => `<circle cx="${X(r.pvm)}" cy="${Y(r[key])}" r="3" fill="${c}" fill-opacity=".45" ${tipA(tipOf(r))}/>`).join('');
+    if (pts.length > 1) s += `<polyline fill="none" stroke="${c}" stroke-width="2" points="${pts.map(p => `${X(p.d)},${Y(p.m)}`).join(' ')}"/>`;
+    s += pts.map(p => `<circle cx="${X(p.d)}" cy="${Y(p.m)}" r="6" fill="${c}" stroke="#111" stroke-width="2" ${tipA(`${playerById(pid)?.nimi} · ${fmtDateFi(p.d)}\nMediaani ${msTxt(p.m)} ms (n=${p.n})`)}/>`).join('');
+  }
+  el.insertAdjacentHTML('beforeend', s + '</svg><div class="tipline" data-tipline>Napauta pistettä.</div>');
+}
+function drawScatterM(el, reps) {
+  el.innerHTML = `<h2>Reaktio vs. tekniikka</h2><div class="hint">x = reaktioaika (T1−T0), y = tekniikka (T2−T1). Alavasen = nopea reagointi ja nopea irtoaminen.</div>`;
+  const rs = reps.filter(r => r.reaktioaika_ms != null && r.tekniikka_ms != null);
+  if (rs.length < 2) { el.insertAdjacentHTML('beforeend', '<p class="muted">Tarvitaan toistoja, joissa on merkitty sekä T1 että T2.</p>'); return; }
+  const pids = [...new Set(rs.map(r => r.pelaajaId))], cm = playerColors(pids), shown = pids.filter(id => cm.has(id)), pts = rs.filter(r => cm.has(r.pelaajaId));
+  el.insertAdjacentHTML('beforeend', `<div class="legend">${shown.map(id => `<span><i style="background:${cm.get(id)}"></i>${esc(playerById(id)?.nimi ?? '?')}</span>`).join('')}</div>`);
+  const W = Math.max(280, el.clientWidth - 24), H = 220, L = 40, R = 10, T = 8, B = 30;
+  const xs = pts.map(r => r.reaktioaika_ms), ys = pts.map(r => r.tekniikka_ms);
+  let xl = Math.min(...xs), xh = Math.max(...xs), yl = Math.min(...ys), yh = Math.max(...ys);
+  if (xh - xl < 20) { xl -= 10; xh += 10; } if (yh - yl < 20) { yl -= 10; yh += 10; }
+  const xt = niceTicks(xl, xh, 4), yt = niceTicks(yl, yh, 4);
+  xl = Math.min(xl, xt[0]); xh = Math.max(xh, xt[xt.length - 1]); yl = Math.min(yl, yt[0]); yh = Math.max(yh, yt[yt.length - 1]);
+  const X = x => L + 8 + (x - xl) / (xh - xl) * (W - L - R - 16), Y = y => T + 6 + (1 - (y - yl) / (yh - yl)) * (H - T - B - 12);
+  let s = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="Reaktio vs tekniikka">`;
+  s += xt.map(t => `<line x1="${X(t)}" x2="${X(t)}" y1="${T}" y2="${H - B}" stroke="#333"/><text x="${X(t)}" y="${H - B + 13}" text-anchor="middle">${fiNum(t)}</text>`).join('');
+  s += yt.map(t => `<line x1="${L}" x2="${W - R}" y1="${Y(t)}" y2="${Y(t)}" stroke="#333"/><text x="${L - 5}" y="${Y(t) + 4}" text-anchor="end">${fiNum(t)}</text>`).join('');
+  s += `<text x="${(L + W) / 2}" y="${H - 3}" text-anchor="middle">reaktioaika ms</text>`;
+  s += pts.map(r => `<circle cx="${X(r.reaktioaika_ms)}" cy="${Y(r.tekniikka_ms)}" r="6" fill="${cm.get(r.pelaajaId)}" stroke="#111" stroke-width="2" ${tipA(tipOf(r))}/>`).join('');
+  el.insertAdjacentHTML('beforeend', s + '</svg><div class="tipline" data-tipline>Napauta pistettä.</div>');
+}
+
+/* =====================================================================
    Vienti ja tuonti (muoto täsmälleen sama kuin läppäriversiossa)
    ===================================================================== */
 const CSV_COLS = ['toisto_id', 'pvm', 'harjoitus', 'pelaaja', 'tilanne', 'video', 'fps_kuvattu', 't0_ms', 't1_ms', 't2_ms', 'reaktioaika_ms', 'lahtoaika_ms', 'tekniikka_ms', 'tarkkuus_ms', 'hylatty', 'merkitsija', 'kommentti', 'pesa'];
@@ -858,8 +1049,11 @@ function showScreen(name, fromPop) {
   SCREEN = name;
   $('#scrHome').classList.toggle('on', name === 'home');
   $('#scrMark').classList.toggle('on', name === 'mark');
+  $('#scrStats').classList.toggle('on', name === 'stats');
   if (name === 'mark') { if (!fromPop) history.pushState({ s: 'mark' }, ''); requestWake(); renderAll(); }
-  else { if (!v.paused) v.pause(); hideCard(); releaseWake(); renderHome(); }
+  else { if (!v.paused) v.pause(); hideCard(); releaseWake(); }
+  if (name === 'stats') { if (!fromPop) history.pushState({ s: 'stats' }, ''); $('#scrStats').scrollTop = 0; renderStats(); }
+  if (name === 'home') renderHome();
 }
 function leaveMark() {
   if (MK.some(k => S.marks[k]) && !confirm('Merkinnät ovat tallentamatta. Poistutaanko?')) return false;
@@ -869,6 +1063,7 @@ function leaveMark() {
 window.addEventListener('popstate', () => {
   if (!$('#sheet').hidden) { closeSheet(); history.pushState({ s: 'mark' }, ''); return; }
   if (SCREEN === 'mark') { if (leaveMark()) showScreen('home', true); else history.pushState({ s: 'mark' }, ''); }
+  else if (SCREEN === 'stats') showScreen('home', true);
 });
 $('#bBack').onclick = () => { if (leaveMark()) history.back(); };
 async function requestWake() { try { if ('wakeLock' in navigator && !wakeLock) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => wakeLock = null); } } catch (e) { } }
@@ -878,6 +1073,8 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 /* ---------- tapahtumat ---------- */
 $('#fileInput').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) loadFile(f); };
 $('#bResume').onclick = () => showScreen('mark');
+$('#bStats').onclick = () => showScreen('stats');
+$('#bStatsBack').onclick = () => history.back();
 $('#ctxBtn').onclick = openSheet;
 $('#fpsBadge').onclick = openFpsSheet;
 $$('.tb').forEach(b => b.onclick = () => setMark(b.dataset.k));
@@ -932,7 +1129,7 @@ window.addEventListener('beforeunload', e => { if (MK.some(k => S.marks[k])) { e
 })();
 
 /* Testirajapinta */
-window.MA = { S, data, DB, loadFile, gotoFrame, buildCSV, buildJSON, importJSON, addPlayer, choosePlayer, setCap, setSetting,
+window.MA = { S, data, DB, AF, statsOf, showScreen, renderStats, loadFile, gotoFrame, buildCSV, buildJSON, importJSON, addPlayer, choosePlayer, setCap, setSetting,
   idle: async () => { while (NAV.busy) await NAV.p; await new Promise(r => setTimeout(r, 30)); } };
 </script>
 </body>
