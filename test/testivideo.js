@@ -94,8 +94,88 @@ function readFrameNumber(video, canvas) {
   return n;
 }
 
+/* ---------- MP4 (H.264) iPhonea varten ----------
+   iPhonen selain ei toista WebM/VP8-videoita luotettavasti, joten siellä testivideo tehdään MP4:ksi.
+   Aikaskaala = fps × 100 ja jokaisen kuvan kesto 100 → kuva-ajat ovat täsmälleen i / fps. */
+function pickFormat() {
+  const q = new URLSearchParams(location.search).get('format');
+  if (q === 'mp4' || q === 'webm') return q;
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const webmOk = document.createElement('video').canPlayType('video/webm; codecs="vp8"');
+  return ios || !webmOk ? 'mp4' : 'webm';
+}
+const u32 = n => { const b = new Uint8Array(4); new DataView(b.buffer).setUint32(0, n >>> 0); return b; };
+const u16 = n => { const b = new Uint8Array(2); new DataView(b.buffer).setUint16(0, n & 0xffff); return b; };
+const box = (type, ...parts) => { const body = cat(parts); return cat([u32(8 + body.length), str(type), body]); };
+const fullbox = (type, ver, flags, ...parts) => box(type, new Uint8Array([ver, (flags >> 16) & 255, (flags >> 8) & 255, flags & 255]), ...parts);
+const MATRIX = [0x00010000, 0, 0, 0, 0x00010000, 0, 0, 0, 0x40000000].map(u32);
+
+function muxMp4({ width, height, fps, samples, avcC }) {
+  const T = Math.round(fps * 100), delta = 100, N = samples.length, D = N * delta;
+  const keys = []; samples.forEach((sm, i) => { if (sm.key) keys.push(u32(i + 1)); });
+  const moovFor = offset => box('moov',
+    fullbox('mvhd', 0, 0, u32(0), u32(0), u32(T), u32(D), u32(0x00010000), u16(0x0100), new Uint8Array(10), ...MATRIX, new Uint8Array(24), u32(2)),
+    box('trak',
+      fullbox('tkhd', 0, 3, u32(0), u32(0), u32(1), u32(0), u32(D), new Uint8Array(8), u16(0), u16(0), u16(0), u16(0), ...MATRIX, u32(width * 65536), u32(height * 65536)),
+      box('mdia',
+        fullbox('mdhd', 0, 0, u32(0), u32(0), u32(T), u32(D), u16(0x55c4), u16(0)),
+        fullbox('hdlr', 0, 0, u32(0), str('vide'), new Uint8Array(12), str('VideoHandler\0')),
+        box('minf',
+          fullbox('vmhd', 0, 1, new Uint8Array(8)),
+          box('dinf', fullbox('dref', 0, 0, u32(1), fullbox('url ', 0, 1))),
+          box('stbl',
+            fullbox('stsd', 0, 0, u32(1), box('avc1', new Uint8Array(6), u16(1), new Uint8Array(16), u16(width), u16(height),
+              u32(0x00480000), u32(0x00480000), u32(0), u16(1), new Uint8Array(32), u16(0x0018), u16(0xffff), box('avcC', avcC))),
+            fullbox('stts', 0, 0, u32(1), u32(N), u32(delta)),
+            fullbox('stss', 0, 0, u32(keys.length), ...keys),
+            fullbox('stsc', 0, 0, u32(1), u32(1), u32(N), u32(1)),
+            fullbox('stsz', 0, 0, u32(0), u32(N), ...samples.map(sm => u32(sm.data.length))),
+            fullbox('stco', 0, 0, u32(1), u32(offset)))))));
+  const ftyp = box('ftyp', str('isom'), u32(512), str('isom'), str('iso2'), str('avc1'), str('mp41'));
+  const moovLen = moovFor(0).length;
+  const moov = moovFor(ftyp.length + moovLen + 8);
+  const mdat = box('mdat', ...samples.map(sm => sm.data));
+  return new Blob([ftyp, moov, mdat], { type: 'video/mp4' });
+}
+async function generateMp4(spec, onProgress) {
+  const { fps, frames } = spec;
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d');
+  const samples = []; let avcC = null, encErr = null;
+  const enc = new VideoEncoder({
+    output: (c, meta) => {
+      const d = new Uint8Array(c.byteLength); c.copyTo(d); samples.push({ ts: c.timestamp, key: c.type === 'key', data: d });
+      const dd = meta && meta.decoderConfig && meta.decoderConfig.description;
+      if (dd && !avcC) avcC = dd instanceof ArrayBuffer ? new Uint8Array(dd).slice() : new Uint8Array(dd.buffer, dd.byteOffset, dd.byteLength).slice();
+    },
+    error: e => encErr = e,
+  });
+  let cfg = null;
+  for (const codec of ['avc1.42002a', 'avc1.4d002a', 'avc1.640034', 'avc1.42001f']) {   // baseline 4.2 riittää 240 fps:lle
+    const c = { codec, width: W, height: H, bitrate: 2_500_000, framerate: fps, avc: { format: 'avc' } };
+    try { if ((await VideoEncoder.isConfigSupported(c)).supported) { cfg = c; break; } } catch (e) { }
+  }
+  if (!cfg) throw new Error('Selain ei osaa pakata H.264-videota (WebCodecs).');
+  enc.configure(cfg);
+  for (let i = 0; i < frames; i++) {
+    drawFrame(ctx, i, spec);
+    const vf = new VideoFrame(cv, { timestamp: Math.round(i * 1e6 / fps), duration: Math.round(1e6 / fps) });
+    enc.encode(vf, { keyFrame: i % 15 === 0 }); vf.close();
+    if (enc.encodeQueueSize > 8) await new Promise(r => setTimeout(r, 5));
+    if (onProgress && i % 30 === 0) onProgress(i / frames);
+  }
+  await enc.flush(); enc.close();
+  if (encErr) throw encErr;
+  if (!avcC) throw new Error('H.264-pakkaaja ei antanut avcC-tietoja.');
+  samples.sort((a, b) => a.ts - b.ts);
+  return muxMp4({ width: W, height: H, fps, samples, avcC });
+}
+/* Testivideon tiedostonimi valitun muodon mukaan */
+function videoFileName(spec, blob) { return blob.type === 'video/mp4' ? spec.name.replace(/\.webm$/, '.mp4') : spec.name; }
+
 /* ---------- koodaus ---------- */
 async function generateVideo(spec, onProgress) {
+  if (pickFormat() === 'mp4') return generateMp4(spec, onProgress);
   const { fps, frames } = spec;
   const cv = new OffscreenCanvas(W, H), ctx = cv.getContext('2d');
   const video = [];

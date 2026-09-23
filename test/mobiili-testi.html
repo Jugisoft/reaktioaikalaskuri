@@ -61,7 +61,7 @@
   <div id="log"></div>
 </div>
 <iframe id="desk"></iframe>
-<script src="testivideo.js"></script>
+<script src="testivideo.js?v=2"></script>
 <script>
 'use strict';
 const logEl = document.getElementById('log');
@@ -80,11 +80,12 @@ async function runTests() {
   MA.data.players = []; MA.data.reps = []; MA.data.videos.clear(); MA.data.settings = {};
 
   const specs = [TEST_SPECS[0], TEST_SPECS[1]];
+  log(`Testivideoiden muoto: ${pickFormat() === 'mp4' ? 'MP4 / H.264 (iPhone)' : 'WebM / VP8'}`, 'info');
   const expected = [];
   for (const spec of specs) {
     log(`${spec.label} – ${spec.name}`, 'head');
     const blob = await generateVideo(spec);
-    await MA.loadFile(new W_.File([blob], spec.name, { type: 'video/webm' })); await MA.idle();
+    await MA.loadFile(new W_.File([blob], videoFileName(spec, blob), { type: blob.type })); await MA.idle();
     check(MA.S.ready && D.getElementById('scrMark').classList.contains('on'), 'video avautui merkintänäkymään');
     check(MA.S.fpsDetected === spec.fps, `fps tunnistettu: ${MA.S.fpsDetected}`);
     const badge = D.getElementById('fpsBadge');

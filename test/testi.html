@@ -28,7 +28,7 @@
   <div id="log"></div>
 </div>
 <iframe id="app" src="../reaktioaika.html?db=testi"></iframe>
-<script src="testivideo.js"></script>
+<script src="testivideo.js?v=2"></script>
 <script>
 'use strict';
 const logEl = document.getElementById('log');
@@ -43,7 +43,7 @@ async function getBlob(spec) {
   return blobs[spec.name];
 }
 document.getElementById('dl').onclick = async () => {
-  for (const s of TEST_SPECS) { const b = await getBlob(s); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = s.name; a.click(); await sleep(300); }
+  for (const s of TEST_SPECS) { const b = await getBlob(s); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = videoFileName(s, b); a.click(); await sleep(300); }
 };
 
 async function runTests() {
@@ -69,7 +69,7 @@ async function runTests() {
   for (const spec of TEST_SPECS) {
     log(`${spec.label} – ${spec.name}`, 'head');
     const blob = await getBlob(spec);
-    await RA.loadFile(new W_.File([blob], spec.name, { type: 'video/webm' }));
+    await RA.loadFile(new W_.File([blob], videoFileName(spec, blob), { type: blob.type }));
     await RA.idle();
     if (!check(RA.S.ready, 'video avautui')) continue;
     check(RA.S.fpsDetected === spec.fps, `fps tunnistettu automaattisesti: ${RA.S.fpsDetected} (odotettu ${spec.fps})`);
@@ -127,7 +127,7 @@ async function runTests() {
     await key('z', { ctrlKey: true });
 
     // Ääniehdotus
-    if (spec.audio) {
+    if (spec.audio && blob.type !== 'video/mp4') {
       for (let i = 0; i < 50 && !(RA.S.audio); i++) await sleep(100);
       if (check(!!RA.S.audio && !RA.S.audio.silent, 'ääniraita purettu (decodeAudioData)')) {
         const rep = spec.reps[0];
