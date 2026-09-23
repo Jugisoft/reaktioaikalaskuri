@@ -2,41 +2,71 @@
 <html lang="fi">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#121211">
 <title>Mobiiliversion testit</title>
 <style>
   :root{color-scheme:dark}
-  body{margin:0;background:#121211;color:#f4f3ee;font:13px/1.45 system-ui,"Segoe UI",sans-serif;display:flex;flex-wrap:wrap;align-items:flex-start;gap:12px}
-  #left{flex:1 1 320px;padding:12px 14px;min-width:0}
+  *{box-sizing:border-box}
+  body{margin:0;background:#121211;color:#f4f3ee;font:13px/1.45 system-ui,"Segoe UI",sans-serif;
+    display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"bar phone" "left phone";align-items:start;gap:0 12px}
+  #bar{grid-area:bar;padding:12px 14px 0}
+  #left{grid-area:left;padding:0 14px 12px;min-width:0}
+  .phone{grid-area:phone;padding:6px;position:sticky;top:0}
   h1{font-size:16px;margin:0 0 8px}
-  button{background:#3987e5;color:#fff;border:0;border-radius:6px;padding:6px 12px;cursor:pointer;margin:0 6px 6px 0}
+  .btns{display:flex;flex-wrap:wrap;gap:6px}
+  button{background:#3987e5;color:#fff;border:0;border-radius:8px;padding:6px 12px;cursor:pointer;font:inherit;font-weight:600}
+  button.demo{background:#199e70} button.sec{background:#2d2d2a;border:1px solid #383835}
   #log div{padding:2px 0;border-bottom:1px solid #232321;white-space:pre-wrap}
   .ok{color:#1baf7a}.fail{color:#e66767;font-weight:700}.info{color:#c3c2b7}.head{color:#eda100;font-weight:700;margin-top:6px}
   #summary{font-size:15px;font-weight:700;margin:8px 0}
-  .phone{flex:none;padding:6px;order:-1;position:sticky;top:0}
-  iframe{border:2px solid #383835;border-radius:18px;background:#000}
+  #summary:empty{display:none}
+  iframe{border:2px solid #383835;border-radius:18px;background:#000;display:block}
   #app{width:min(390px,calc(100vw - 16px));height:min(780px,calc(100vh - 16px))}
   #desk{width:40px;height:40px;opacity:.02;position:fixed;right:0;bottom:0;border:0;pointer-events:none}
+  a{color:#5598e7}
+  .onlyMobile{display:none}
+
+  /* Puhelimella: napit ylhäällä, sovellus koko ruudun kokoisena, loki alla */
+  @media (max-width:700px){
+    body{display:block}
+    #bar{position:sticky;top:0;z-index:2;background:#121211;padding:calc(6px + env(safe-area-inset-top,0px)) 8px 6px;border-bottom:1px solid #383835}
+    #bar h1,#bar .desc{display:none}
+    .btns{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+    .btns::-webkit-scrollbar{display:none}
+    button{flex:none;min-height:44px;font-size:14px;padding:0 12px}
+    .phone{position:static;padding:0}
+    #app{width:100vw;height:calc(100dvh - 58px - env(safe-area-inset-top,0px));border:0;border-radius:0}
+    #left{padding:10px 12px 40px}
+    .onlyMobile{display:block}
+    #summary{font-size:13px;margin:6px 0 0;font-weight:600;max-height:3.2em;overflow:hidden}
+    #app{height:calc(100dvh - 58px - 3.4em - env(safe-area-inset-top,0px))}
+  }
 </style>
 </head>
 <body>
-<div id="left">
+<div id="bar">
   <h1>Mobiiliversion (index.html) automaattitestit</h1>
-  <p class="info">Puhelinkokoinen näkymä (390×780). Testi napauttaa oikeita kosketusnappeja ja tarkistaa videosta, että näkyvä kuva on oikea. Lopuksi tarkistetaan, että läppäriversio näkee samat toistot. Testit käyttävät erillistä testitietokantaa.</p>
-  <button id="run">Aja testit</button>
-  <button id="demo" style="background:#199e70">📊 Luo demodata ja avaa analyysi</button>
-  <button id="clearDemo" style="background:#2d2d2a;border:1px solid #383835">Tyhjennä testitietokanta</button>
-  <p class="info">Demodata tallentuu vain erilliseen testitietokantaan, ei oikeisiin merkintöihisi. Puhelimella näkymää on mukavampi käyttää koko ruudulla: <a href="../index.html?db=testi" style="color:#5598e7">avaa testitietokanta omana sivunaan</a> (otsikossa lukee TESTI).</p>
+  <p class="info desc">Puhelinkokoinen näkymä (390×780). Testi napauttaa oikeita kosketusnappeja ja tarkistaa videosta, että näkyvä kuva on oikea. Lopuksi tarkistetaan, että läppäriversio näkee samat toistot. Testit käyttävät erillistä testitietokantaa.</p>
+  <div class="btns">
+    <button id="demo" class="demo">📊 Demodata + analyysi</button>
+    <button id="run">▶ Aja testit</button>
+    <button id="clearDemo" class="sec">Tyhjennä</button>
+  </div>
   <div id="summary"></div>
-  <div id="log"></div>
 </div>
 <div class="phone"><iframe id="app" src="../index.html?db=testi"></iframe></div>
+<div id="left">
+  <p class="info">Demodata ja testit käyttävät erillistä testitietokantaa, eivät oikeita merkintöjäsi. <span class="onlyMobile">Testiloki näkyy tässä sovelluksen alapuolella – vieritä alas. </span>Voit myös <a href="../index.html?db=testi">avata testitietokannan omana sivunaan</a> (otsikossa lukee TESTI).</p>
+  <div id="log"></div>
+</div>
 <iframe id="desk"></iframe>
 <script src="testivideo.js"></script>
 <script>
 'use strict';
 const logEl = document.getElementById('log');
 let pass = 0, fail = 0;
-function log(msg, cls = 'info') { const d = document.createElement('div'); d.className = cls; d.textContent = msg; logEl.appendChild(d); d.scrollIntoView({ block: 'nearest' }); }
+function log(msg, cls = 'info') { const d = document.createElement('div'); d.className = cls; d.textContent = msg; logEl.appendChild(d); if (matchMedia('(min-width:701px)').matches) d.scrollIntoView({ block: 'nearest' }); }
 function check(c, msg) { if (c) { pass++; log('✔ ' + msg, 'ok'); } else { fail++; log('✘ ' + msg, 'fail'); } return c; }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
