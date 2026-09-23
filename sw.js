@@ -1,7 +1,7 @@
 /* Service worker: sovellus toimii offline-tilassa (esim. hallissa ilman verkkoa).
    HTML haetaan ensisijaisesti verkosta, jotta päivitykset tulevat heti käyttöön;
    ilman verkkoa käytetään välimuistia. Videoita ei koskaan välimuisteta eikä lähetetä. */
-const CACHE = 'reaktioaika-v2';
+const CACHE = 'reaktioaika-v3';
 const FILES = ['./', './index.html', './reaktioaika.html', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png', './icons/apple-touch-icon.png'];
 
@@ -16,7 +16,9 @@ self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
   e.respondWith(
-    fetch(req).then(res => {
+    // cache: 'no-cache' = tarkista aina palvelimelta, onko tiedosto muuttunut. GitHub Pages käskee muuten
+    // selainta käyttämään vanhaa kopiota 10 min, jolloin päivitys näkyisi viiveellä.
+    fetch(req, { cache: 'no-cache' }).then(res => {
       if (res.ok && res.type === 'basic') { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
       return res;
     }).catch(() => caches.match(req, { ignoreSearch: true }).then(r => r || caches.match('./index.html')))

@@ -1124,7 +1124,7 @@ window.addEventListener('beforeunload', e => { if (MK.some(k => S.marks[k])) { e
   let persisted = false;
   try { if (navigator.storage?.persist) persisted = await navigator.storage.persisted() || await navigator.storage.persist(); } catch (e) { }
   $('#persistInfo').innerHTML = persisted ? '✔ Selain on luvannut säilyttää tiedot pysyvästi.' : '⚠ Selain ei luvannut pysyvää tallennusta – jaa varmuuskopio säännöllisesti. (Kotinäytölle asennettuna tämä yleensä korjaantuu.)';
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !TEST_DB) navigator.serviceWorker.register('sw.js').catch(() => { });
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !TEST_DB) navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => { });
   if (!hasRVFC) toast('Selain on vanha: kuva-ajat ovat arvioita. Päivitä Chrome / iOS.', 'warn', 7000);
 })();
 
