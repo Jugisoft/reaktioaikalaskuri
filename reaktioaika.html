@@ -141,6 +141,12 @@ table.data input[type=text]{width:100%;min-width:140px;padding:2px 5px}
 .keys{display:grid;grid-template-columns:repeat(2,1fr);gap:2px 24px}
 .keys div{display:flex;justify-content:space-between;gap:10px;padding:3px 0;border-bottom:1px solid var(--border)}
 @media (max-width:1100px){ #view-mark.active{grid-template-columns:minmax(0,1fr) 286px} .frameinfo{font-size:12px} }
+.kpl-rivi{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.kpl-piste{width:10px;height:10px;border-radius:50%;background:var(--muted);flex:none}.kpl-piste.ok{background:#1baf7a}.kpl-piste.virhe{background:#e66767}
+.kpl-pieni{color:var(--muted);font-size:12px;margin-left:auto}
+.kpl-teksti{margin:6px 0 0;color:var(--text2)}.kpl-teksti a{color:var(--accent2)}.kpl-huom{color:#eda100}
+.kpl-lomake{display:flex;gap:8px;margin-top:8px}
+.kpl-nappi{display:inline-block;margin-top:8px;padding:6px 12px;border-radius:6px;background:var(--accent);color:#fff;font-weight:600;text-decoration:none}
 </style>
 </head>
 <body>
@@ -269,6 +275,7 @@ table.data input[type=text]{width:100%;min-width:140px;padding:2px 5px}
 <section class="view" id="view-settings">
   <div class="page settings">
     <h2>Asetukset ja data</h2>
+    <div class="card" id="kplBox"></div>
     <div class="card">
       <h3>Yleiset</h3>
       <div class="row"><label for="setMarker">Merkitsijä (nimesi)</label><input type="text" id="setMarker" placeholder="esim. valmentajan nimi"></div>
@@ -337,6 +344,7 @@ table.data input[type=text]{width:100%;min-width:140px;padding:2px 5px}
 <div id="tip" hidden></div>
 <div id="toasts"></div>
 
+<script src="kpl.js"></script>
 <script>
 'use strict';
 /* =====================================================================
@@ -913,7 +921,7 @@ function renderVideoReps() {
    ===================================================================== */
 function renderPlayerSelect() {
   const sel = $('#selPlayer'), cur = sel.value || data.settings.lastPlayer || '';
-  sel.innerHTML = '<option value="">– valitse –</option>' + playersSorted().map(p => `<option value="${p.id}">${esc(p.nimi)}</option>`).join('');
+  sel.innerHTML = '<option value="">– valitse –</option>' + KPL.ryhmat(playersSorted()).map(([otsikko, ps]) => `<optgroup label="${esc(otsikko)}">${ps.map(p => `<option value="${p.id}">${esc(p.nimi)}</option>`).join('')}</optgroup>`).join('');
   if (playerById(cur)) sel.value = cur;
 }
 function renderTypeSelect() {
@@ -1586,6 +1594,7 @@ window.addEventListener('beforeunload', e => { if (MARK_KEYS.some(k => S.marks[k
   $('#inSession').value = data.settings.lastSession || '';
   $('#selBase').value = data.settings.lastBase || '';
   renderPlayerSelect(); renderTypeSelect(); renderSessionList(); renderFilters(); renderAll(); applyZoom();
+  KPL.init({ mount: '#kplBox', pelaajatPaivittyi: () => { renderPlayerSelect(); renderFilters(); renderDataViews(); } });
   if (!hasRVFC) toast('Selain ei tue requestVideoFrameCallback-rajapintaa – kuva-ajat ovat arvioita. Käytä Chromea tai Edgeä.', 'warn', 9000);
 })();
 

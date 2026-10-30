@@ -35,6 +35,14 @@ input[type=text],input[type=date],input[type=number]{background:var(--s2);border
 .screen{position:fixed;inset:0;display:none}
 .screen.on{display:flex}
 
+.kpl{border:1px solid var(--line)}
+.kpl-rivi{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.kpl-piste{width:10px;height:10px;border-radius:50%;background:var(--muted);flex:none}.kpl-piste.ok{background:var(--ok)}.kpl-piste.virhe{background:var(--neg)}
+.kpl-pieni{color:var(--muted);font-size:13px;margin-left:auto}
+.kpl-teksti{margin:8px 0 0;color:var(--text2);font-size:14px}.kpl-teksti a{color:var(--accent)}.kpl-huom{color:var(--warn)}
+.kpl-lomake{display:flex;gap:8px;margin-top:10px}.kpl-lomake input{flex:1;min-width:0;background:var(--s2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-height:48px;font-size:16px}
+.kpl-nappi{display:flex;align-items:center;justify-content:center;margin-top:10px;min-height:48px;border-radius:12px;background:var(--accent);color:#fff;font-weight:700;text-decoration:none}
+.chips-otsikko{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:12px 0 6px}
 /* ---------- Tänään ---------- */
 #scrHome{flex-direction:column;overflow-y:auto;padding:calc(12px + var(--safe-t)) 14px calc(24px + var(--safe-b));gap:12px}
 .hrow{display:flex;gap:10px;align-items:center}
@@ -207,6 +215,7 @@ details summary{min-height:48px;display:flex;align-items:center;color:var(--text
     <h2 id="todayTitle">Tämän päivän toistot</h2>
     <div id="todayList"></div>
   </div>
+  <div class="card kpl" id="kplBox"></div>
   <div class="card">
     <h2>Tiedot</h2>
     <div class="btnrow">
@@ -279,6 +288,7 @@ details summary{min-height:48px;display:flex;align-items:center;color:var(--text
 <div id="card" hidden></div>
 <div id="toast" hidden></div>
 
+<script src="kpl.js"></script>
 <script>
 'use strict';
 /* =====================================================================
@@ -290,7 +300,7 @@ const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const hasRVFC = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
 const FPS_SNAP = [23.976, 24, 25, 29.97, 30, 48, 50, 59.94, 60, 90, 100, 119.88, 120, 180, 200, 239.76, 240, 480, 960];
-const APP_VERSION = '2026-09-23.6 (iPhone-korjaus)';
+const APP_VERSION = '2026-10-30.1 (KPL Keskus)';
 const PESAT = ['Kotipesä', '1-pesä', '2-pesä', '3-pesä'];
 const MK = ['t0', 't1', 't2'];
 const MCOL = { t0: '#eda100', t1: '#1baf7a', t2: '#eb6834' };
@@ -635,8 +645,8 @@ function openSheet() {
   sh.innerHTML = `<div class="grip"></div>
     <h3>Pelaaja</h3>
     ${rec.length ? `<div class="chips recent">${rec.map(id => `<button data-p="${id}" class="${id === s.pid ? 'on' : ''}">${esc(playerById(id).nimi)}</button>`).join('')}</div>` : ''}
-    ${others.length ? `<div class="chips" style="margin-top:8px">${others.map(p => `<button data-p="${p.id}" class="${p.id === s.pid ? 'on' : ''}">${esc(p.nimi)}</button>`).join('')}</div>` : ''}
-    <div class="addrow"><input type="text" id="newPlayer" placeholder="＋ Uusi pelaaja" enterkeyhint="done"><button id="bAddP" class="primary">Lisää</button></div>
+    ${others.length ? KPL.ryhmat(others).map(([otsikko, ps]) => `<div class="chips-otsikko">${esc(otsikko)}</div><div class="chips">${ps.map(p => `<button data-p="${p.id}" class="${p.id === s.pid ? 'on' : ''}">${esc(p.nimi)}</button>`).join('')}</div>`).join('') : ''}
+    <div class="addrow"><input type="text" id="newPlayer" placeholder="＋ Uusi pelaaja (ei Keskuksessa)" enterkeyhint="done"><button id="bAddP" class="primary">Lisää</button></div>
     <h3>Tilanne (pesä)</h3>
     <div class="chips">${PESAT.map(p => `<button data-b="${p}" class="${p === s.pesa ? 'on' : ''}">${p}</button>`).join('')}</div>
     <h3>Ärsyke</h3>
@@ -1138,6 +1148,7 @@ window.addEventListener('beforeunload', e => { if (MK.some(k => S.marks[k])) { e
   }
   history.replaceState({ s: 'home' }, '');
   renderHome(); renderCtx();
+  KPL.init({ mount: '#kplBox', pelaajatPaivittyi: () => { renderCtx(); renderHome(); } });
   let persisted = false;
   try { if (navigator.storage?.persist) persisted = await navigator.storage.persisted() || await navigator.storage.persist(); } catch (e) { }
   $('#persistInfo').innerHTML = persisted ? '✔ Selain on luvannut säilyttää tiedot pysyvästi.' : '⚠ Selain ei luvannut pysyvää tallennusta – jaa varmuuskopio säännöllisesti. (Kotinäytölle asennettuna tämä yleensä korjaantuu.)';

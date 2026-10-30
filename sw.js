@@ -1,8 +1,8 @@
 /* Service worker: sovellus toimii offline-tilassa (esim. hallissa ilman verkkoa).
    HTML haetaan ensisijaisesti verkosta, jotta päivitykset tulevat heti käyttöön;
    ilman verkkoa käytetään välimuistia. Videoita ei koskaan välimuisteta eikä lähetetä. */
-const CACHE = 'reaktioaika-v6';
-const FILES = ['./', './index.html', './reaktioaika.html', './manifest.webmanifest',
+const CACHE = 'reaktioaika-v7';
+const FILES = ['./', './index.html', './reaktioaika.html', './kpl.js', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png', './icons/apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
