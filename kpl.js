@@ -58,7 +58,7 @@
       const { data: { session } } = await sb.auth.getSession();
       if (!session) { K.tila = 'kirjaudu'; kayttaja = ''; piirra(); return; }
       kayttaja = session.user.email || '';
-      const { data: ok } = await sb.rpc('on_valmentaja');
+      const { data: ok } = await sb.rpc('on_jasen');   // kaikki Keskuksen käyttäjät; RLS rajaa pelaajat oman alueen mukaan (PSU = juniorit)
       if (!ok) { K.tila = 'eioikeuksia'; piirra(); return; }
       await haePelaajat();
       K.tila = 'ok'; piirra();
